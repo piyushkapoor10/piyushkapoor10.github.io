@@ -1069,8 +1069,9 @@ header .member-actions {
 }
 
 footer .content {
-    border-top: 1px solid #e6e9ea;    
+    border-top: 1px solid #e6e9ea;
     padding-bottom: 20px
+
 }
 footer .content p{
     font-size: 15px;
@@ -1078,14 +1079,16 @@ footer .content p{
 
 footer .to-top-wrapper {
     font-size: 30px;
-    display: block;
     cursor: pointer;
-    margin: -25px auto 50px;
+    margin: auto;
+    margin-bottom: 50px;
     border-radius: 50%;
     width: 50px;
     height: 50px;
     border: 1px solid #e6e9ea;
-    background: #fff
+    background: #fff;
+    position: relative;
+    top: -25px;
 }
 
 footer .to-top-wrapper .to-top {
