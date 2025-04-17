@@ -27,24 +27,23 @@ scene.add(light);
 const loader = new GLTFLoader();
 let obj;
 let mixer; // Declare mixer here, so it can be accessed later in the animation loop
+let Animations;
 let walkAnimation;
+let idleAnimation;
 let action;
 let targetQuaternion;
    
 
-loader.load('Walking.glb', (gltf) => {
+loader.load('characterAnimations.glb', (gltf) => {
     obj = gltf.scene; // The model is inside gltf.scene
     console.log(gltf.animations);
     scene.add(obj); // Add the model to the scene   
     obj.position.y = -3;
-    obj.rotation.y = Math.PI;
-    walkAnimation = gltf.animations[0];
-    mixer = new THREE.AnimationMixer(obj);
-    console.log(walkAnimation);
-    action = mixer.clipAction(walkAnimation, obj);
-    console.log(action.isRunning());
-    action.play();
-    console.log(walkAnimation.tracks);
+    obj.rotation.y = Math.PI;    
+    mixer = new THREE.AnimationMixer(obj);    
+    walkAnimation = mixer.clipAction( gltf.animations[0], obj); 
+    idleAnimation = mixer.clipAction( gltf.animations[1], obj); 
+    idleAnimation.play();
 }, undefined, (error) => {
     console.error('Error loading model:', error);
 });
@@ -169,12 +168,16 @@ let animate = () => {
             camera.position.addScaledVector(cameraDirection, -moveSpeed); // Move backward
         }
         if (!keys.left && !keys.right && !keys.up && !keys.down) {
-            action.paused = true; 
+
+            idleAnimation.play();
+            walkAnimation.stop();
         }
         cameraDirection.add( obj.position );
         if(keys.left || keys.right || keys.up || keys.down){
             //obj.lookAt( cameraDirection );
-            action.paused = false; 
+            
+            idleAnimation.stop();
+            walkAnimation.play();    
             const mock = new THREE.Object3D();
 
             obj.parent.add(mock);
@@ -186,9 +189,7 @@ let animate = () => {
             mock.parent.remove(mock);
             obj.quaternion.slerp(targetQuaternion, 0.2);
         }
-        
-        
-        controls.target.copy(obj.position);
+            controls.target.copy(obj.position);
         //   if (keys.forward) obj.position.y += moveSpeed;
         //   if (keys.backward) obj.position.y -= moveSpeed;
     }
