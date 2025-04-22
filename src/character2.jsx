@@ -29,7 +29,10 @@ let obj;
 let mixer; // Declare mixer here, so it can be accessed later in the animation loop
 let Animations;
 let walkAnimation;
+let walkBackAnimation;
 let idleAnimation;
+let jumpAnimation;
+let uninturreptedActionAnimation=false;
 let action;
 let targetQuaternion;
    
@@ -41,8 +44,12 @@ loader.load('characterAnimations.glb', (gltf) => {
     obj.position.y = -3;
     obj.rotation.y = Math.PI;    
     mixer = new THREE.AnimationMixer(obj);    
-    walkAnimation = mixer.clipAction( gltf.animations[0], obj); 
-    idleAnimation = mixer.clipAction( gltf.animations[1], obj); 
+    walkAnimation = mixer.clipAction( gltf.animations[2], obj);
+    idleAnimation = mixer.clipAction( gltf.animations[0], obj);
+    walkBackAnimation = mixer.clipAction( gltf.animations[3], obj); 
+    jumpAnimation = mixer.clipAction( gltf.animations[1], obj);
+    jumpAnimation.setLoop(THREE.LoopOnce);
+    jumpAnimation.clampWhenFinished = true;
     idleAnimation.play();
 }, undefined, (error) => {
     console.error('Error loading model:', error);
@@ -68,22 +75,16 @@ ground.position.y = -3;  // Position the ground just below the character (adjust
 scene.add(ground);
 
 let bounceControl = false;
-let velocityY = 0; // Vertical velocity
-let gravity = -0.01; // Gravity effect
-let bounceFactor = 0.8; // How much velocity is retained after each bounce
-let maxHeight = 3.4; // Maximum height
-let minHeight = -3.4; // Minimum height (ground level)
-let moveSpeed = 0.05; // Speed at which the object moves
-let rotationSpeed =0.5;
-let smoothnessFactor = 0.2; 
-
+const cameraDirection = new THREE.Vector3(0, 0, -1);
+const cameraRight = new THREE.Vector3();
 let keys = {
     left: false,
     right: false,
     up: false,
     down: false,
     forward: false,
-    backward: false
+    backward: false,
+    jump: false
 };
 
 // Handle keyboard input
@@ -104,17 +105,18 @@ document.addEventListener('keydown', (event) => {
         case 'ArrowDown':
         case 's':
             keys.down = true;
-            break;
-        case ' ':
-            keys.forward = true;
-            break;
+            break;        
         case 'Shift':
             keys.backward = true;
+            break;
+        case ' ':
+            keys.jump = true;
             break;
     }
 });
 
 document.addEventListener('keyup', (event) => {
+    console.log(event.key);
     switch (event.key) {
         case 'ArrowLeft':
         case 'a':
@@ -132,11 +134,11 @@ document.addEventListener('keyup', (event) => {
         case 's':
             keys.down = false;
             break;
-        case ' ':
-            keys.forward = false;
-            break;
         case 'Shift':
             keys.backward = false;
+            break;
+        case ' ':
+            keys.jump = false;
             break;
     }
 });
@@ -144,40 +146,74 @@ document.addEventListener('keyup', (event) => {
 
 
 let animate = () => {
+    
+    let velocityY = 0; // Vertical velocity
+    let gravity = -0.01; // Gravity effect
+    let bounceFactor = 0.8; // How much velocity is retained after each bounce
+    let maxHeight = 3.4; // Maximum height
+    let minHeight = -3.4; // Minimum height (ground level)
+    let moveSpeed = 0.05; // Speed at which the object moves
+    let rotationSpeed =0.5;
+    let smoothnessFactor = 0.2; 
+
     requestAnimationFrame(animate);
-    const cameraDirection = new THREE.Vector3(0, 0, -1); // Default forward direction (negative Z-axis)
+     // Default forward direction (negative Z-axis)
     camera.getWorldDirection(cameraDirection);
     cameraDirection.y = 0; // Restrict to horizontal movement (no vertical movement)
     cameraDirection.normalize();
+    
+    cameraRight.crossVectors(cameraDirection, camera.up);
+    cameraRight.normalize();
+    isUninterruptedActionAnimationRunning();
     // Move the object based on key press
     if (obj) {
-        if (keys.left) {
-            obj.position.x -= moveSpeed;
-            camera.position.x -= moveSpeed;
+        if((keys.up && keys.left)){
+            obj.rotateY(0.2);
+            moveSpeed=moveSpeed/2;
+            moveForwardBackward(moveSpeed);
+            moveLeftRight(moveSpeed);
+        }else if((keys.up && keys.right)){
+            obj.rotateY(-0.2);
+            moveSpeed=moveSpeed/2;
+            moveForwardBackward(moveSpeed);
+            moveLeftRight(-moveSpeed);
         }
-        if (keys.right) {
-            obj.position.x += moveSpeed;
-            camera.position.x += moveSpeed;
+        else if( (keys.down && keys.right)){
+            obj.rotateY(0.2);
+            moveSpeed=moveSpeed/2;
+            moveForwardBackward(-moveSpeed);
+            moveLeftRight(-moveSpeed);
         }
-        if (keys.up) {
-            obj.position.addScaledVector(cameraDirection, moveSpeed); // Move forward
-            camera.position.addScaledVector(cameraDirection, moveSpeed); // Move forward
+        else if((keys.down && keys.left)){
+            obj.rotateY(-0.2);
+            moveSpeed=moveSpeed/2;
+            moveForwardBackward(-moveSpeed);
+            moveLeftRight(moveSpeed);
         }
-        if (keys.down) {
-            obj.position.addScaledVector(cameraDirection, -moveSpeed); // Move backward
-            camera.position.addScaledVector(cameraDirection, -moveSpeed); // Move backward
+        else if (keys.right) {
+            moveLeftRight(-moveSpeed);
+            obj.rotateY(-0.4);
         }
-        if (!keys.left && !keys.right && !keys.up && !keys.down) {
-
-            idleAnimation.play();
-            walkAnimation.stop();
+        else if (keys.left) {
+            moveLeftRight(moveSpeed);
+            obj.rotateY(0.4);
+        }
+        else if (keys.up) {
+            moveForwardBackward(moveSpeed);
+        }
+        else if (keys.down) {
+            moveForwardBackward(-moveSpeed);            
+        }
+        if(keys.jump){
+            jump();
+        }
+        if (!keys.left && !keys.right && !keys.up && !keys.down) {            
+            playAnimation(idleAnimation);
+            stopAnimation(walkAnimation,walkBackAnimation);
         }
         cameraDirection.add( obj.position );
         if(keys.left || keys.right || keys.up || keys.down){
-            //obj.lookAt( cameraDirection );
-            
-            idleAnimation.stop();
-            walkAnimation.play();    
+            //obj.lookAt( cameraDirection );    
             const mock = new THREE.Object3D();
 
             obj.parent.add(mock);
@@ -188,6 +224,7 @@ let animate = () => {
 
             mock.parent.remove(mock);
             obj.quaternion.slerp(targetQuaternion, 0.2);
+          
         }
             controls.target.copy(obj.position);
         //   if (keys.forward) obj.position.y += moveSpeed;
@@ -199,9 +236,50 @@ let animate = () => {
 };
 
 let controls = new OrbitControls(camera, renderer.domElement);
-
+function moveForwardBackward(moveSpeed){    
+    stopAnimation(idleAnimation);
+    if(moveSpeed>=0){        
+        playAnimation(walkAnimation);
+    }else{
+        playAnimation(walkBackAnimation);        
+    }
+    obj.position.addScaledVector(cameraDirection, moveSpeed); // Move forward
+    camera.position.addScaledVector(cameraDirection, moveSpeed);
+}
+function moveLeftRight(moveSpeed){    
+    stopAnimation(idleAnimation);
+    playAnimation(walkAnimation);
+    obj.position.addScaledVector(cameraRight, -moveSpeed);
+    camera.position.addScaledVector(cameraRight, -moveSpeed);
+}
+function jump(){
+    stopAnimation(idleAnimation,walkAnimation,walkBackAnimation);
+    playAnimation(jumpAnimation);    
+}
+function isUninterruptedActionAnimationRunning(){
+    console.log(jumpAnimation.isRunning());
+    if(jumpAnimation.isRunning()){
+        if (jumpAnimation.time >= jumpAnimation.duration) {
+            jumpAnimation.stop();  // Stop animation when it finishes
+            jumpAnimation.reset();
+            playAnimation(idleAnimation);
+        }
+        return true;
+    }else{
+        return false;
+    }
+}
+function playAnimation(animation){
+    if(!isUninterruptedActionAnimationRunning() && !animation.isRunning()){
+        animation.play();
+    }
+}
+function stopAnimation(...animations){
+    animations.forEach(animation => {
+        animation.stop();
+    }); 
+}
 window.onload = () => {
-    bounceControl = true;
     animate();
 };
 
