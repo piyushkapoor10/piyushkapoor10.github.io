@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
+import normalMapImage from '/ground/moss_groud_02_Normal_gl_2k.png'
+import heightMapImage from '/ground/moss_groud_02_Height_2k.png'
+import aormhMapImage from '/ground/moss_groud_02_ao_r_m_h_2k.png'
+//import normalMapImage from '/ground/moss_groud_02_Normal_gl_2k.png'
+//import roughnessMapImage from '/ground/moss_groud_02_Roughness_2k.png'
 
 document.body.style.margin = 0;
 document.body.style.padding = 0;
@@ -13,16 +20,35 @@ document.documentElement.style.height = '100%';
 const scene = new THREE.Scene();
 const renderer = new THREE.WebGLRenderer();
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
-const light = new THREE.DirectionalLight();
-scene.background = new THREE.Color('white');
+const light = new THREE.DirectionalLight(0xffffff, 1);
+//scene.background = new THREE.Color('white');
+
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+light.position.set(5, 10, 5);
+light.target.position.set(0, 0, 0);
+light.castShadow = true;
+light.shadowDarkness = 0.5;
+light.shadowCameraVisible = true; // only for debugging
+// these six values define the boundaries of the yellow box seen above
+light.shadow.camera.left = -10;
+light.shadow.camera.right = 10;
+light.shadow.camera.top = 10;
+light.shadow.camera.bottom = -10;
+light.shadow.mapSize.width = 1024
+light.shadow.mapSize.height = 1024
+light.shadow.camera.near = 1
+light.shadow.camera.far = 35  
+light.shadow.bias = -0.005;
 //renderer.setSize(3 * window.innerWidth / 4, 3 * window.innerHeight / 4);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
-camera.position.set(0, 5, 10);
-light.position.set(-1, 1, 1);
+camera.position.set(-10, -5, -5);
 
+// light.position.set(5, 10, 5); // Position of the light
+// light.castShadow = true;
 scene.add(light);
-
+//scene.add(new THREE.CameraHelper(light.shadow.camera)) 
 // Load a custom model (e.g., myModel.glb)
 const loader = new GLTFLoader();
 let obj;
@@ -37,44 +63,81 @@ let action;
 let targetQuaternion;
    
 
+
+
 loader.load('characterAnimations.glb', (gltf) => {
     obj = gltf.scene; // The model is inside gltf.scene
     console.log(gltf.animations);
     scene.add(obj); // Add the model to the scene   
-    obj.position.y = -3;
-    obj.rotation.y = Math.PI;    
-    mixer = new THREE.AnimationMixer(obj);    
+    obj.position.y = -7;
+    obj.rotation.y = Math.PI;  
+    gltf.scene.traverse(function (child) {
+        if (child.isMesh) {
+          child.castShadow = true;
+        }
+     });
+    mixer = new THREE.AnimationMixer(obj);        
     walkAnimation = mixer.clipAction( gltf.animations[2], obj);
     idleAnimation = mixer.clipAction( gltf.animations[0], obj);
     walkBackAnimation = mixer.clipAction( gltf.animations[3], obj); 
     jumpAnimation = mixer.clipAction( gltf.animations[1], obj);
     jumpAnimation.setLoop(THREE.LoopOnce);
     jumpAnimation.clampWhenFinished = true;
+    mixer.addEventListener('finished', stopUninterruptedAnimations);
     idleAnimation.play();
 }, undefined, (error) => {
     console.error('Error loading model:', error);
 });
 
-const groundGeometry = new THREE.PlaneGeometry(100, 100);  // Large plane to act as the ground
 
 // Load texture
-const textureLoader = new THREE.TextureLoader();
-const groundTexture = textureLoader.load('rocky_terrain_diff_4k.jpg'); // Replace with your texture path
+ const textureLoader = new THREE.TextureLoader();
+ const exrLoader = new EXRLoader();
 
-// Repeat the texture to fill the plane
-groundTexture.wrapS = THREE.RepeatWrapping;
-groundTexture.wrapT = THREE.RepeatWrapping;
-groundTexture.repeat.set(10, 10); // Adjust this to control how many times the texture repeats across the plane
+ textureLoader.load('sky_41_2k.png', function (texture) {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = texture;
+    scene.environment = texture;
+});
 
-// Use a MeshStandardMaterial for better lighting/shading effects
-const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture });
+const groundTexture = textureLoader.load('ground/moss_groud_02_Base_Color_2k.png'); // Replace with your texture path
+const normalMap = textureLoader.load(normalMapImage);
+//const roughnessMap = textureLoader.load(roughnessMapImage);
+const heightMap = textureLoader.load(heightMapImage);
+//const aoMap = textureLoader.load('ground/moss_groud_02_Ambient_Occlusion_2k.png');  
+const aormMap = textureLoader.load(aormhMapImage);  
 
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+// const groundTexture = textureLoader.load('ground2/rocky_terrain_diff_4k.jpg'); // Replace with your texture path
+// const normalMap = exrLoader.load('ground2/rocky_terrain_nor_gl_4k.exr');
+// const roughnessMap = exrLoader.load('ground2/rocky_terrain_rough_4k.exr');
+// const heightMap = textureLoader.load('ground2/rocky_terrain_disp_4k.png');
+const textures = [groundTexture, normalMap, aormMap, heightMap];
+textures.forEach((texture) => {
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(20, 20);
+});// Match the repeat to the base texture
+
+
+//const ground = new THREE.Mesh(groundGeometry, groundMaterialWithAORHM);
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(100,100, 512, 512),
+    new THREE.MeshPhongMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      displacementMap: heightMap,
+      normalMap: normalMap,
+      map: groundTexture,      
+      aoMap:aormMap,
+      displacementScale: 0.3,
+      flatShading: true      
+    })
+  );
 ground.rotation.x = -Math.PI / 2;  // Rotate the plane to make it horizontal
-ground.position.y = -3;  // Position the ground just below the character (adjust as needed)
+ground.position.y = -7.2;
+ground.receiveShadow=true;
 scene.add(ground);
 
-let bounceControl = false;
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
 let keys = {
@@ -86,7 +149,13 @@ let keys = {
     backward: false,
     jump: false
 };
-
+function stopUninterruptedAnimations (e) {    
+    if (e.action === jumpAnimation) {        
+        jumpAnimation.stop();
+        jumpAnimation.reset();
+        playAnimation(idleAnimation);
+    }
+}
 // Handle keyboard input
 document.addEventListener('keydown', (event) => {
     switch (event.key) {
@@ -152,7 +221,7 @@ let animate = () => {
     let bounceFactor = 0.8; // How much velocity is retained after each bounce
     let maxHeight = 3.4; // Maximum height
     let minHeight = -3.4; // Minimum height (ground level)
-    let moveSpeed = 0.05; // Speed at which the object moves
+    let moveSpeed = 0.03; // Speed at which the object moves
     let rotationSpeed =0.5;
     let smoothnessFactor = 0.2; 
 
@@ -164,31 +233,26 @@ let animate = () => {
     
     cameraRight.crossVectors(cameraDirection, camera.up);
     cameraRight.normalize();
-    isUninterruptedActionAnimationRunning();
     // Move the object based on key press
-    if (obj) {
+    if (obj && !isMovementPaused()) {
         if((keys.up && keys.left)){
             obj.rotateY(0.2);
             moveSpeed=moveSpeed/2;
-            moveForwardBackward(moveSpeed);
-            moveLeftRight(moveSpeed);
+            moveDiagonally(moveSpeed,moveSpeed);
         }else if((keys.up && keys.right)){
             obj.rotateY(-0.2);
             moveSpeed=moveSpeed/2;
-            moveForwardBackward(moveSpeed);
-            moveLeftRight(-moveSpeed);
+            moveDiagonally(moveSpeed,-moveSpeed);
         }
         else if( (keys.down && keys.right)){
             obj.rotateY(0.2);
             moveSpeed=moveSpeed/2;
-            moveForwardBackward(-moveSpeed);
-            moveLeftRight(-moveSpeed);
+            moveDiagonally(-moveSpeed,-moveSpeed);
         }
         else if((keys.down && keys.left)){
             obj.rotateY(-0.2);
             moveSpeed=moveSpeed/2;
-            moveForwardBackward(-moveSpeed);
-            moveLeftRight(moveSpeed);
+            moveDiagonally(-moveSpeed,moveSpeed);
         }
         else if (keys.right) {
             moveLeftRight(-moveSpeed);
@@ -236,15 +300,30 @@ let animate = () => {
 };
 
 let controls = new OrbitControls(camera, renderer.domElement);
-function moveForwardBackward(moveSpeed){    
-    stopAnimation(idleAnimation);
+function moveForwardBackward(moveSpeed){        
     if(moveSpeed>=0){        
+        stopAnimation(idleAnimation,walkBackAnimation);
         playAnimation(walkAnimation);
     }else{
+        stopAnimation(idleAnimation,walkAnimation);
         playAnimation(walkBackAnimation);        
     }
     obj.position.addScaledVector(cameraDirection, moveSpeed); // Move forward
     camera.position.addScaledVector(cameraDirection, moveSpeed);
+}
+function moveDiagonally(moveFwdBackSpeed,moveLeftRightSpeed){    
+    
+    if(moveFwdBackSpeed>=0){        
+        stopAnimation(idleAnimation,walkBackAnimation);
+        playAnimation(walkAnimation);
+    }else{
+        stopAnimation(idleAnimation,walkAnimation);
+        playAnimation(walkBackAnimation);        
+    }
+    obj.position.addScaledVector(cameraDirection, moveFwdBackSpeed); // Move forward
+    camera.position.addScaledVector(cameraDirection, moveFwdBackSpeed);    
+    obj.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
+    camera.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
 }
 function moveLeftRight(moveSpeed){    
     stopAnimation(idleAnimation);
@@ -257,17 +336,25 @@ function jump(){
     playAnimation(jumpAnimation);    
 }
 function isUninterruptedActionAnimationRunning(){
-    console.log(jumpAnimation.isRunning());
-    if(jumpAnimation.isRunning()){
-        if (jumpAnimation.time >= jumpAnimation.duration) {
-            jumpAnimation.stop();  // Stop animation when it finishes
-            jumpAnimation.reset();
-            playAnimation(idleAnimation);
-        }
+    if(jumpAnimation.isRunning()){        
         return true;
     }else{
         return false;
     }
+}
+function isMovementPaused(){
+    if(jumpAnimation.isRunning()){        
+        const currentTime = jumpAnimation.time;
+        const animationDuration = jumpAnimation.getClip().duration;
+        const startTime = 0;             // Start of the animation (0 seconds)
+        const midTime = 1;               // 1 second in (start of the middle section)
+        const endTime = animationDuration - 1.5; 
+        if ((currentTime >= startTime && currentTime <= midTime) || 
+            (currentTime >= endTime && currentTime <= animationDuration)) {
+            return true;
+        }
+    }
+    return false;
 }
 function playAnimation(animation){
     if(!isUninterruptedActionAnimationRunning() && !animation.isRunning()){
@@ -282,7 +369,6 @@ function stopAnimation(...animations){
 window.onload = () => {
     animate();
 };
-
 window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight); // Resize renderer to full screen
     camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
