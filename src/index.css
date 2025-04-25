@@ -9,4 +9,139 @@ html {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  font-family: 'Montserrat', sans-serif;  
+}
+
+#waiting-screen{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #2c303a;
+  opacity: 1; /* Visible by default */
+  visibility: visible; /* Visible by default */
+  transition: opacity 2s ease-in-out, visibility 0s 2s;
+}
+
+#waiting-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 2s ease-in-out, visibility 0s 0s; /* No delay for visibility change */
+}
+
+.container {
+  width: 40vw;
+  padding-top: 30vh;  
+  text-align: center;   
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.loading-text, .waiting-text {
+  color: lightgray;  
+  margin-top: 10px;
+}
+
+.progress {
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.progress-bar {	
+  height: 18px;
+	background-color: #ee303c;  
+  border-radius: 4px; 
+  width: 0%; 
+  transition: width 0.4s linear;
+}
+
+#btn-explore{
+  display: none;
+  position: relative;
+  justify-content: center;
+  align-items: center;
+  border: none;
+  border-radius: 5px;
+  box-shadow: 0px 6px 24px 0px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+#btn-explore {
+  content: "";
+  background: #383f51;
+  transition: all 0.4s ease-in-out;
+}
+
+#btn-explore:hover::after {
+  left: 0;
+  width: 100%;
+}
+
+#btn-explore span {
+  text-align: center;
+  text-decoration: none;
+  width: 100%;
+  padding: 18px 25px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  z-index: 1;
+  transition: all 0.3s ease-in-out;
+}
+
+#btn-explore:hover span {
+  color:  #2c303a;
+  animation: scaleUp 0.3s ease-in-out;
+}
+
+#btn-explore:not(:hover) span {
+  animation: scaleDown 0.3s ease-in-out;
+}
+
+@keyframes scaleUp {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+} 
+
+@keyframes scaleDown {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.progress-striped .progress-bar, #btn-explore{ 	
+  background-color: #FCBC51;
+  background-image: linear-gradient(
+        45deg, rgb(252,163,17) 25%, 
+        transparent 25%, transparent 50%, 
+        rgb(252,163,17) 50%, rgb(252,163,17) 75%,
+        transparent 75%, transparent); 
+}
+.progress-striped .progress-bar {
+  animation: progressAnimationStrike 2s linear infinite;
+}
+@keyframes progressAnimationStrike {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 40px 0;
+  }
 }

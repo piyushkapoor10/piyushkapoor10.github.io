@@ -18,48 +18,78 @@ document.documentElement.style.padding = 0;
 document.documentElement.style.height = '100%';
 
 const scene = new THREE.Scene();
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
 const light = new THREE.DirectionalLight(0xffffff, 1);
 //scene.background = new THREE.Color('white');
+const loadingManager = new THREE.LoadingManager();
 
+// When everything is loaded, start the animation
+loadingManager.onLoad = function() {
+    animate(); // Start the animation after everything is loaded
+    //document.getElementById("loading-container").style.display = "none";
+    const progressBar = document.querySelector('.progress');
+    const loadingText = document.querySelector('.loading-text');
+    if (progressBar && loadingText) {
+        progressBar.style.display = "none"; // Update the progress bar width
+        loadingText.style.display = "none";
+    }
+    document.getElementById("btn-explore").style.display = "inline-flex";
+};
+
+loadingManager.onStart = function (url, itemsLoaded, itemsTotal) {
+    document.getElementById("loading-container").style.display = "block"; // Show loading bar
+    console.log('Started loading:', url);
+};
+
+
+loadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
+    // Update loading bar width as a percentage of items loaded
+    const progress = (itemsLoaded / itemsTotal) * 100;
+    const progressBar = document.querySelector('.progress-bar');
+    if (progressBar) {
+        progressBar.style.width = progress + '%'; // Update the progress bar width
+    }
+    console.log('Loading progress:', progress + '%');
+};
+
+loadingManager.onError = function (url) {
+    console.error('Error loading resource:', url);
+};
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 light.position.set(5, 10, 5);
 light.target.position.set(0, 0, 0);
 light.castShadow = true;
-light.shadowDarkness = 0.5;
+light.shadowDarkness = 0.8;
 light.shadowCameraVisible = true; // only for debugging
 // these six values define the boundaries of the yellow box seen above
-light.shadow.camera.left = -10;
-light.shadow.camera.right = 10;
-light.shadow.camera.top = 10;
-light.shadow.camera.bottom = -10;
-light.shadow.mapSize.width = 1024
-light.shadow.mapSize.height = 1024
-light.shadow.camera.near = 1
-light.shadow.camera.far = 35  
-light.shadow.bias = -0.005;
+light.shadow.camera.left = -2;
+light.shadow.camera.right = 2;
+light.shadow.camera.top = 2;
+light.shadow.camera.bottom = -2;
+light.shadow.mapSize.width = 512;
+light.shadow.mapSize.height = 512;
+light.shadow.camera.near = 5;
+light.shadow.camera.far = 15; 
+light.shadow.bias = -0.003;
 //renderer.setSize(3 * window.innerWidth / 4, 3 * window.innerHeight / 4);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 camera.position.set(-10, -5, -5);
-
 // light.position.set(5, 10, 5); // Position of the light
 // light.castShadow = true;
 scene.add(light);
 //scene.add(new THREE.CameraHelper(light.shadow.camera)) 
 // Load a custom model (e.g., myModel.glb)
-const loader = new GLTFLoader();
+const loader = new GLTFLoader(loadingManager);
 let obj;
-let mixer; // Declare mixer here, so it can be accessed later in the animation loop
-let Animations;
+let mixer; 
 let walkAnimation;
 let walkBackAnimation;
 let idleAnimation;
+let runAnimation;
 let jumpAnimation;
-let uninturreptedActionAnimation=false;
-let action;
 let targetQuaternion;
    
 
@@ -77,10 +107,13 @@ loader.load('characterAnimations.glb', (gltf) => {
         }
      });
     mixer = new THREE.AnimationMixer(obj);        
-    walkAnimation = mixer.clipAction( gltf.animations[2], obj);
+    
     idleAnimation = mixer.clipAction( gltf.animations[0], obj);
-    walkBackAnimation = mixer.clipAction( gltf.animations[3], obj); 
     jumpAnimation = mixer.clipAction( gltf.animations[1], obj);
+    runAnimation= mixer.clipAction( gltf.animations[2], obj);
+    walkAnimation = mixer.clipAction( gltf.animations[3], obj);
+    walkBackAnimation = mixer.clipAction( gltf.animations[4], obj); 
+    
     jumpAnimation.setLoop(THREE.LoopOnce);
     jumpAnimation.clampWhenFinished = true;
     mixer.addEventListener('finished', stopUninterruptedAnimations);
@@ -91,8 +124,8 @@ loader.load('characterAnimations.glb', (gltf) => {
 
 
 // Load texture
- const textureLoader = new THREE.TextureLoader();
- const exrLoader = new EXRLoader();
+ const textureLoader = new THREE.TextureLoader(loadingManager);
+ const exrLoader = new EXRLoader(loadingManager);
 
  textureLoader.load('sky_41_2k.png', function (texture) {
     texture.mapping = THREE.EquirectangularReflectionMapping;
@@ -146,7 +179,7 @@ let keys = {
     up: false,
     down: false,
     forward: false,
-    backward: false,
+    run: false,
     jump: false
 };
 function stopUninterruptedAnimations (e) {    
@@ -161,22 +194,26 @@ document.addEventListener('keydown', (event) => {
     switch (event.key) {
         case 'ArrowLeft':
         case 'a':
+        case 'A':
             keys.left = true;
             break;
         case 'ArrowRight':
         case 'd':
+        case 'D':
             keys.right = true;
             break;
         case 'ArrowUp':
         case 'w':
+        case 'W':
             keys.up = true;
             break;
         case 'ArrowDown':
         case 's':
+        case 'S':
             keys.down = true;
             break;        
         case 'Shift':
-            keys.backward = true;
+            keys.run = true;
             break;
         case ' ':
             keys.jump = true;
@@ -189,22 +226,26 @@ document.addEventListener('keyup', (event) => {
     switch (event.key) {
         case 'ArrowLeft':
         case 'a':
+        case 'A':
             keys.left = false;
             break;
         case 'ArrowRight':
         case 'd':
+        case 'D':
             keys.right = false;
             break;
         case 'ArrowUp':
         case 'w':
+        case 'W':
             keys.up = false;
             break;
         case 'ArrowDown':
         case 's':
+        case 'S':
             keys.down = false;
             break;
         case 'Shift':
-            keys.backward = false;
+            keys.run = false;
             break;
         case ' ':
             keys.jump = false;
@@ -270,10 +311,9 @@ let animate = () => {
         }
         if(keys.jump){
             jump();
-        }
+        }        
         if (!keys.left && !keys.right && !keys.up && !keys.down) {            
-            playAnimation(idleAnimation);
-            stopAnimation(walkAnimation,walkBackAnimation);
+            playAnimation(idleAnimation);            
         }
         cameraDirection.add( obj.position );
         if(keys.left || keys.right || keys.up || keys.down){
@@ -290,34 +330,55 @@ let animate = () => {
             obj.quaternion.slerp(targetQuaternion, 0.2);
           
         }
-            controls.target.copy(obj.position);
+        controls.target.copy(obj.position);
         //   if (keys.forward) obj.position.y += moveSpeed;
         //   if (keys.backward) obj.position.y -= moveSpeed;
     }
     controls.update();
     mixer.update(1 / 60);
+    updateLightPosition();
     renderer.render(scene, camera);
 };
+function updateLightPosition() {
+    // Move the light with the character
+    light.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
+    
+    // Update the light's target to always look at the obj
+    light.target.position.copy(obj.position);
+    light.target.updateMatrixWorld();  // Important to update the target's world matrix
 
+    // Optionally, adjust shadow properties if needed
+    light.shadow.camera.left = obj.position.x - 10;
+    light.shadow.camera.right = obj.position.x + 10;
+    light.shadow.camera.top = obj.position.z + 10;
+    light.shadow.camera.bottom = obj.position.z - 10;
+
+    // Recalculate the bounding sphere of the shadow camera
+    light.shadow.camera.updateProjectionMatrix();
+}
 let controls = new OrbitControls(camera, renderer.domElement);
-function moveForwardBackward(moveSpeed){        
-    if(moveSpeed>=0){        
-        stopAnimation(idleAnimation,walkBackAnimation);
-        playAnimation(walkAnimation);
-    }else{
-        stopAnimation(idleAnimation,walkAnimation);
-        playAnimation(walkBackAnimation);        
+function moveForwardBackward(moveSpeed){
+    if(keys.run && moveSpeed>=0){
+        moveSpeed=getRunSpeed(moveSpeed);
+        playAnimation(runAnimation);
     }
+    else if(moveSpeed>=0){        
+        playAnimation(walkAnimation);
+    }else{        
+        playAnimation(walkBackAnimation);        
+    }    
     obj.position.addScaledVector(cameraDirection, moveSpeed); // Move forward
     camera.position.addScaledVector(cameraDirection, moveSpeed);
 }
 function moveDiagonally(moveFwdBackSpeed,moveLeftRightSpeed){    
-    
-    if(moveFwdBackSpeed>=0){        
-        stopAnimation(idleAnimation,walkBackAnimation);
+    if(keys.run && moveFwdBackSpeed>=0){
+        moveFwdBackSpeed=getRunSpeed(moveFwdBackSpeed);
+        moveLeftRightSpeed=getRunSpeed(moveLeftRightSpeed);
+        playAnimation(runAnimation);
+    }
+    else if(moveFwdBackSpeed>=0){        
         playAnimation(walkAnimation);
-    }else{
-        stopAnimation(idleAnimation,walkAnimation);
+    }else{    
         playAnimation(walkBackAnimation);        
     }
     obj.position.addScaledVector(cameraDirection, moveFwdBackSpeed); // Move forward
@@ -325,15 +386,21 @@ function moveDiagonally(moveFwdBackSpeed,moveLeftRightSpeed){
     obj.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
     camera.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
 }
-function moveLeftRight(moveSpeed){    
-    stopAnimation(idleAnimation);
-    playAnimation(walkAnimation);
+function moveLeftRight(moveSpeed){
+    if(keys.run){
+        moveSpeed=getRunSpeed(moveSpeed);
+        playAnimation(runAnimation);
+    }else{
+        playAnimation(walkAnimation);
+    }    
     obj.position.addScaledVector(cameraRight, -moveSpeed);
     camera.position.addScaledVector(cameraRight, -moveSpeed);
 }
-function jump(){
-    stopAnimation(idleAnimation,walkAnimation,walkBackAnimation);
+function jump(){ 
     playAnimation(jumpAnimation);    
+}
+function getRunSpeed(moveSpeed){
+    return moveSpeed*3;
 }
 function isUninterruptedActionAnimationRunning(){
     if(jumpAnimation.isRunning()){        
@@ -358,19 +425,17 @@ function isMovementPaused(){
 }
 function playAnimation(animation){
     if(!isUninterruptedActionAnimationRunning() && !animation.isRunning()){
+        mixer.stopAllAction();
         animation.play();
     }
 }
-function stopAnimation(...animations){
-    animations.forEach(animation => {
-        animation.stop();
-    }); 
-}
-window.onload = () => {
-    animate();
-};
+
 window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight); // Resize renderer to full screen
     camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
     camera.updateProjectionMatrix(); // Recalculate the camera projection matrix
 });
+
+document.getElementById('btn-explore').addEventListener('click',()=>{
+    document.getElementById('waiting-screen').classList.add('hidden');;
+})
