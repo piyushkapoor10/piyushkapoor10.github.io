@@ -23,7 +23,12 @@ const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerH
 const light = new THREE.DirectionalLight(0xffffff, 1);
 //scene.background = new THREE.Color('white');
 const loadingManager = new THREE.LoadingManager();
+let orbit = new THREE.Object3D();
 
+// const axesHelper = new THREE.AxesHelper(5);
+// scene.add(axesHelper);
+
+let isPointerLocked = false;
 // When everything is loaded, start the animation
 loadingManager.onLoad = function() {
     animate(); // Start the animation after everything is loaded
@@ -76,7 +81,6 @@ light.shadow.bias = -0.003;
 //renderer.setSize(3 * window.innerWidth / 4, 3 * window.innerHeight / 4);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
-camera.position.set(-10, -5, -5);
 // light.position.set(5, 10, 5); // Position of the light
 // light.castShadow = true;
 scene.add(light);
@@ -89,17 +93,16 @@ let walkAnimation;
 let walkBackAnimation;
 let idleAnimation;
 let runAnimation;
+let runBackAnimation;
+let runJumpAnimation;
 let jumpAnimation;
 let targetQuaternion;
-   
-
-
 
 loader.load('characterAnimations.glb', (gltf) => {
     obj = gltf.scene; // The model is inside gltf.scene
     console.log(gltf.animations);
     scene.add(obj); // Add the model to the scene   
-    obj.position.y = -7;
+    obj.position.y = 0.2;
     obj.rotation.y = Math.PI;  
     gltf.scene.traverse(function (child) {
         if (child.isMesh) {
@@ -111,14 +114,18 @@ loader.load('characterAnimations.glb', (gltf) => {
     idleAnimation = mixer.clipAction( gltf.animations[0], obj);
     jumpAnimation = mixer.clipAction( gltf.animations[1], obj);
     runAnimation= mixer.clipAction( gltf.animations[2], obj);
-    walkAnimation = mixer.clipAction( gltf.animations[3], obj);
-    walkBackAnimation = mixer.clipAction( gltf.animations[4], obj); 
-    
+    runBackAnimation= mixer.clipAction( gltf.animations[3], obj);
+    runJumpAnimation= mixer.clipAction( gltf.animations[4], obj);
+    walkAnimation = mixer.clipAction( gltf.animations[5], obj);
+    walkBackAnimation = mixer.clipAction( gltf.animations[6], obj); 
     jumpAnimation.setLoop(THREE.LoopOnce);
     jumpAnimation.clampWhenFinished = true;
+    runJumpAnimation.setLoop(THREE.LoopOnce);
+    runJumpAnimation.clampWhenFinished = true;
     mixer.addEventListener('finished', stopUninterruptedAnimations);
-    idleAnimation.play();
-}, undefined, (error) => {
+    idleAnimation.play();    
+    addOrbitControls();
+}, undefined, (error) => {    
     console.error('Error loading model:', error);
 });
 
@@ -167,7 +174,6 @@ const ground = new THREE.Mesh(
     })
   );
 ground.rotation.x = -Math.PI / 2;  // Rotate the plane to make it horizontal
-ground.position.y = -7.2;
 ground.receiveShadow=true;
 scene.add(ground);
 
@@ -186,6 +192,11 @@ function stopUninterruptedAnimations (e) {
     if (e.action === jumpAnimation) {        
         jumpAnimation.stop();
         jumpAnimation.reset();
+        playAnimation(idleAnimation);
+    }
+    else if (e.action === runJumpAnimation) {        
+        runJumpAnimation.stop();
+        runJumpAnimation.reset();
         playAnimation(idleAnimation);
     }
 }
@@ -256,7 +267,6 @@ document.addEventListener('keyup', (event) => {
 
 
 let animate = () => {
-    
     let velocityY = 0; // Vertical velocity
     let gravity = -0.01; // Gravity effect
     let bounceFactor = 0.8; // How much velocity is retained after each bounce
@@ -267,7 +277,7 @@ let animate = () => {
     let smoothnessFactor = 0.2; 
 
     requestAnimationFrame(animate);
-     // Default forward direction (negative Z-axis)
+    // Default forward direction (negative Z-axis)
     camera.getWorldDirection(cameraDirection);
     cameraDirection.y = 0; // Restrict to horizontal movement (no vertical movement)
     cameraDirection.normalize();
@@ -330,45 +340,60 @@ let animate = () => {
             obj.quaternion.slerp(targetQuaternion, 0.2);
           
         }
-        controls.target.copy(obj.position);
-        //   if (keys.forward) obj.position.y += moveSpeed;
-        //   if (keys.backward) obj.position.y -= moveSpeed;
     }
-    controls.update();
+    updateOrbitPosition();
     mixer.update(1 / 60);
     updateLightPosition();
-    renderer.render(scene, camera);
+    renderer.render(scene, camera);    
 };
-function updateLightPosition() {
-    // Move the light with the character
-    light.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
-    
-    // Update the light's target to always look at the obj
-    light.target.position.copy(obj.position);
-    light.target.updateMatrixWorld();  // Important to update the target's world matrix
 
-    // Optionally, adjust shadow properties if needed
-    light.shadow.camera.left = obj.position.x - 10;
-    light.shadow.camera.right = obj.position.x + 10;
-    light.shadow.camera.top = obj.position.z + 10;
-    light.shadow.camera.bottom = obj.position.z - 10;
-
-    // Recalculate the bounding sphere of the shadow camera
-    light.shadow.camera.updateProjectionMatrix();
+function addOrbitControls(){
+    orbit.rotation.order = "YXZ";
+    scene.add(orbit);    
+    orbit.add( camera );   
 }
-let controls = new OrbitControls(camera, renderer.domElement);
+
+function updateOrbitPosition(){
+    orbit.position.copy(obj.position);
+    orbit.position.y +=2;
+    camera.position.set(0, 0, 10);    
+    camera.lookAt(orbit.position);
+}
+
+function updateLightPosition() {
+    light.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
+    light.target.position.copy(obj.position);
+    light.target.updateMatrixWorld();
+
+    // Move shadow camera with the object — center frustum around object
+    const shadowCam = light.shadow.camera;
+    shadowCam.left = -10;
+    shadowCam.right = 10;
+    shadowCam.top = 10;
+    shadowCam.bottom = -10;
+    shadowCam.near = 1;
+    shadowCam.far = 30;
+
+    // Make sure the projection matrix updates
+    shadowCam.updateProjectionMatrix();
+}
+
 function moveForwardBackward(moveSpeed){
     if(keys.run && moveSpeed>=0){
         moveSpeed=getRunSpeed(moveSpeed);
         playAnimation(runAnimation);
     }
+    else if(keys.run && moveSpeed<=0){
+        moveSpeed=getRunSpeed(moveSpeed);
+        playAnimation(runBackAnimation);
+    }
     else if(moveSpeed>=0){        
         playAnimation(walkAnimation);
     }else{        
-        playAnimation(walkBackAnimation);        
+        playReverseAnimation(walkAnimation);      
     }    
     obj.position.addScaledVector(cameraDirection, moveSpeed); // Move forward
-    camera.position.addScaledVector(cameraDirection, moveSpeed);
+    orbit.position.addScaledVector(cameraDirection, moveSpeed);
 }
 function moveDiagonally(moveFwdBackSpeed,moveLeftRightSpeed){    
     if(keys.run && moveFwdBackSpeed>=0){
@@ -376,15 +401,20 @@ function moveDiagonally(moveFwdBackSpeed,moveLeftRightSpeed){
         moveLeftRightSpeed=getRunSpeed(moveLeftRightSpeed);
         playAnimation(runAnimation);
     }
+    else if(keys.run && moveFwdBackSpeed<0){
+        moveFwdBackSpeed=getRunSpeed(moveFwdBackSpeed);
+        moveLeftRightSpeed=getRunSpeed(moveLeftRightSpeed);
+        playAnimation(runBackAnimation);
+    }
     else if(moveFwdBackSpeed>=0){        
         playAnimation(walkAnimation);
     }else{    
-        playAnimation(walkBackAnimation);        
+        playReverseAnimation(walkAnimation);        
     }
     obj.position.addScaledVector(cameraDirection, moveFwdBackSpeed); // Move forward
-    camera.position.addScaledVector(cameraDirection, moveFwdBackSpeed);    
+    orbit.position.addScaledVector(cameraDirection, moveFwdBackSpeed);    
     obj.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
-    camera.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
+    orbit.position.addScaledVector(cameraRight, -moveLeftRightSpeed);
 }
 function moveLeftRight(moveSpeed){
     if(keys.run){
@@ -394,16 +424,22 @@ function moveLeftRight(moveSpeed){
         playAnimation(walkAnimation);
     }    
     obj.position.addScaledVector(cameraRight, -moveSpeed);
-    camera.position.addScaledVector(cameraRight, -moveSpeed);
+    orbit.position.addScaledVector(cameraRight, -moveSpeed);
 }
 function jump(){ 
-    playAnimation(jumpAnimation);    
+    if(keys.run && keys.down){
+        playReverseAnimation(runJumpAnimation);        
+    }else if(keys.run){        
+        playAnimation(runJumpAnimation);
+    }else{
+        playAnimation(jumpAnimation);    
+    }
 }
 function getRunSpeed(moveSpeed){
     return moveSpeed*3;
 }
 function isUninterruptedActionAnimationRunning(){
-    if(jumpAnimation.isRunning()){        
+    if(jumpAnimation.isRunning()||runJumpAnimation.isRunning()){        
         return true;
     }else{
         return false;
@@ -423,19 +459,50 @@ function isMovementPaused(){
     }
     return false;
 }
-function playAnimation(animation){
-    if(!isUninterruptedActionAnimationRunning() && !animation.isRunning()){
+function playAnimation(animation){    
+    if((!isUninterruptedActionAnimationRunning() && !animation.isRunning())||(animation.timeScale<0)){        
         mixer.stopAllAction();
+        animation.timeScale = 1;        
         animation.play();
     }
 }
-
+function playReverseAnimation(animation){
+    if((!isUninterruptedActionAnimationRunning() && !animation.isRunning())||(animation.timeScale>0)){
+        mixer.stopAllAction();
+        animation.timeScale = -1;
+        animation.play();
+    }
+}
 window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight); // Resize renderer to full screen
     camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
     camera.updateProjectionMatrix(); // Recalculate the camera projection matrix
 });
 
-document.getElementById('btn-explore').addEventListener('click',()=>{
-    document.getElementById('waiting-screen').classList.add('hidden');;
+
+document.addEventListener('mousemove', function(e){
+    let scale = -0.01;
+    if (document.pointerLockElement) {
+        orbit.rotateY(e.movementX * scale);  // Rotate based on horizontal movement
+        orbit.rotateX(e.movementY * scale);  // Rotate based on vertical movement
+        orbit.rotation.z = 0; // Keep the camera level by locking the Z-axis rotation
+        const minRotationX = -Math.PI / 3;  // Example: -45 degrees
+        const maxRotationX = Math.PI / 16;   // Example: 45 degrees
+        orbit.rotation.x = Math.max(minRotationX, Math.min(maxRotationX, orbit.rotation.x));
+    }
 })
+   
+
+document.getElementById('btn-explore').addEventListener('click',()=>{
+    document.getElementById('waiting-screen').classList.add('hidden');
+    document.documentElement.requestPointerLock();
+});
+document.addEventListener('click', function() {
+    if(document.getElementById('waiting-screen').classList.contains('hidden'))
+        document.documentElement.requestPointerLock();  // Request pointer lock on click
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.pointerLockElement) {
+        document.exitPointerLock();  // Allow the user to exit pointer lock
+    }
+});
