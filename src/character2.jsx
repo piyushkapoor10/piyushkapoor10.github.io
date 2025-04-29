@@ -40,11 +40,12 @@ loadingManager.onLoad = function() {
         loadingText.style.display = "none";
     }
     document.getElementById("btn-explore").style.display = "inline-flex";
+    addOrbitControls();
 };
 
 loadingManager.onStart = function (url, itemsLoaded, itemsTotal) {
     document.getElementById("loading-container").style.display = "block"; // Show loading bar
-    console.log('Started loading:', url);
+    //console.log('Started loading:', url);
 };
 
 
@@ -98,6 +99,7 @@ let runJumpAnimation;
 let jumpAnimation;
 let targetQuaternion;
 
+
 loader.load('characterAnimations.glb', (gltf) => {
     obj = gltf.scene; // The model is inside gltf.scene
     console.log(gltf.animations);
@@ -123,8 +125,7 @@ loader.load('characterAnimations.glb', (gltf) => {
     runJumpAnimation.setLoop(THREE.LoopOnce);
     runJumpAnimation.clampWhenFinished = true;
     mixer.addEventListener('finished', stopUninterruptedAnimations);
-    idleAnimation.play();    
-    addOrbitControls();
+    idleAnimation.play();       
 }, undefined, (error) => {    
     console.error('Error loading model:', error);
 });
@@ -140,6 +141,19 @@ loader.load('characterAnimations.glb', (gltf) => {
     scene.environment = texture;
 });
 
+// Initialize the size of the entire ground plane
+const planeWidth = 100;
+const planeHeight = 100;
+
+// Divide the ground into tiles (patches) - You can adjust the number of rows and columns
+const rows = 10; // Number of tiles vertically
+const cols = 10; // Number of tiles horizontally
+
+// Define the tile size
+const tileWidth = planeWidth / cols;
+const tileHeight = planeHeight / rows;
+const groundTiles = [];
+
 const groundTexture = textureLoader.load('ground/moss_groud_02_Base_Color_2k.png'); // Replace with your texture path
 const normalMap = textureLoader.load(normalMapImage);
 //const roughnessMap = textureLoader.load(roughnessMapImage);
@@ -153,29 +167,76 @@ const aormMap = textureLoader.load(aormhMapImage);
 // const heightMap = textureLoader.load('ground2/rocky_terrain_disp_4k.png');
 const textures = [groundTexture, normalMap, aormMap, heightMap];
 textures.forEach((texture) => {
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(20, 20);
-});// Match the repeat to the base texture
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+
+    // Set the repeat to 1, which means the texture will be applied once
+    texture.repeat.set(1, 1);
+
+    // Enable mipmaps for better performance
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter; // Use mipmaps for scaling
+    texture.magFilter = THREE.LinearFilter;
+  });
 
 
-//const ground = new THREE.Mesh(groundGeometry, groundMaterialWithAORHM);
-const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(100,100, 512, 512),
-    new THREE.MeshPhongMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
-      displacementMap: heightMap,
-      normalMap: normalMap,
-      map: groundTexture,      
-      aoMap:aormMap,
-      displacementScale: 0.3,
-      flatShading: true      
-    })
-  );
-ground.rotation.x = -Math.PI / 2;  // Rotate the plane to make it horizontal
-ground.receiveShadow=true;
-scene.add(ground);
+function createGroundTile(x, z, resolution) {
+    const geometry = new THREE.PlaneGeometry(tileWidth, tileHeight, resolution, resolution);
+    const material = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide,
+        displacementMap: heightMap,
+        normalMap: normalMap,
+        map: groundTexture,
+        aoMap: aormMap,
+        displacementScale: 0.3,
+        flatShading: true
+    });
+
+    const tile = new THREE.Mesh(geometry, material);
+    const baseOverlap = 0.01;  // Minimum overlap
+    const overlapFactor = 0.1;  // Overlap factor to increase as distance increases
+    
+    // Calculate distance from origin (or another point) to determine overlap
+    const distanceFromOrigin = Math.sqrt(x * x + z * z); // Distance to (0, 0)
+    const dynamicOverlap = baseOverlap + distanceFromOrigin * overlapFactor;
+    tile.position.set(x<0?x + dynamicOverlap:x-dynamicOverlap, 0, z<0?z + dynamicOverlap:z-dynamicOverlap);  // Apply overlap to both x and z
+
+    tile.rotation.x = -Math.PI / 2;  // Rotate the tile to make it horizontal
+    tile.receiveShadow = true;
+
+    return tile;
+}
+// Create a grid of ground tiles
+for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+        const tile = createGroundTile(
+            j * tileWidth - planeWidth / 2,  // x position: space tiles horizontally across columns
+            i * tileHeight - planeHeight / 2,  // z position: space tiles vertically across rows
+            2  // Start with a lower resolution for all tiles initially
+        );
+        groundTiles.push(tile);
+        scene.add(tile);
+    }
+}
+
+function updateGroundGeometry() {
+    groundTiles.forEach(tile => {        
+        const distanceToTile = orbit.position.distanceTo(tile.position);
+        let resolution = 1;        
+        if (distanceToTile < 10) {
+            resolution = 64;  // High resolution for nearby tiles
+        } else if (distanceToTile < 20) {
+            resolution = 16;  // Medium resolution for mid-range tiles
+        }
+        // Only update the tile's geometry if the resolution has changed
+        if (tile.geometry.parameters.width !== resolution) {
+            const newGeometry = new THREE.PlaneGeometry(tileWidth, tileHeight, resolution, resolution);
+            tile.geometry.dispose();  
+            tile.geometry = newGeometry;
+        }
+    });
+}
 
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
@@ -233,7 +294,6 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('keyup', (event) => {
-    console.log(event.key);
     switch (event.key) {
         case 'ArrowLeft':
         case 'a':
@@ -341,6 +401,7 @@ let animate = () => {
           
         }
     }
+    updateGroundGeometry(camera);
     updateOrbitPosition();
     mixer.update(1 / 60);
     updateLightPosition();
@@ -438,7 +499,7 @@ function jump(){
 function getRunSpeed(moveSpeed){
     return moveSpeed*3;
 }
-function isUninterruptedActionAnimationRunning(){
+function isUninterruptedActionAnimationRunning(){    
     if(jumpAnimation.isRunning()||runJumpAnimation.isRunning()){        
         return true;
     }else{
@@ -466,9 +527,10 @@ function playAnimation(animation){
         animation.play();
     }
 }
-function playReverseAnimation(animation){
+function playReverseAnimation(animation){    
     if((!isUninterruptedActionAnimationRunning() && !animation.isRunning())||(animation.timeScale>0)){
         mixer.stopAllAction();
+        animation.time = animation._clip.duration;
         animation.timeScale = -1;
         animation.play();
     }

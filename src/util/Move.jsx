@@ -1,4 +1,8 @@
 class Move{
+    
+    Move(){
+
+    }
     moveForward(){
         
     }

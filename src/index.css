@@ -40,9 +40,11 @@ html {
 
 .loading-text, .waiting-text {
   color: lightgray;  
-  margin-top: 10px;
+  margin-top: 20px;
 }
-
+.waiting-text p{
+  margin: 0;
+}
 .progress {
   padding: 6px;
   background: rgba(0, 0, 0, 0.25);
