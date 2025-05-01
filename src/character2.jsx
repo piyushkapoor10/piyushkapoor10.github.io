@@ -31,7 +31,7 @@ let orbit = new THREE.Object3D();
 let isPointerLocked = false;
 // When everything is loaded, start the animation
 loadingManager.onLoad = function() {
-    animate(); // Start the animation after everything is loaded
+     // Start the animation after everything is loaded
     //document.getElementById("loading-container").style.display = "none";
     const progressBar = document.querySelector('.progress');
     const loadingText = document.querySelector('.loading-text');
@@ -40,7 +40,8 @@ loadingManager.onLoad = function() {
         loadingText.style.display = "none";
     }
     document.getElementById("btn-explore").style.display = "inline-flex";
-    addOrbitControls();
+    animate();
+    addOrbitControls();    
 };
 
 loadingManager.onStart = function (url, itemsLoaded, itemsTotal) {
@@ -160,60 +161,60 @@ const normalMap = textureLoader.load(normalMapImage);
 const heightMap = textureLoader.load(heightMapImage);
 //const aoMap = textureLoader.load('ground/moss_groud_02_Ambient_Occlusion_2k.png');  
 const aormMap = textureLoader.load(aormhMapImage);  
+groundTexture.minFilter = THREE.LinearMipMapLinearFilter;
+groundTexture.magFilter = THREE.LinearFilter;
+normalMap.minFilter = THREE.LinearMipMapLinearFilter;
+normalMap.magFilter = THREE.LinearFilter;
+heightMap.minFilter = THREE.LinearMipMapLinearFilter;
+heightMap.magFilter = THREE.LinearFilter;
+aormMap.minFilter = THREE.LinearMipMapLinearFilter;
+aormMap.magFilter = THREE.LinearFilter;
+const highDetailMaterial = new THREE.MeshPhongMaterial({
+    side: THREE.DoubleSide,
+    displacementMap: heightMap,
+    normalMap: normalMap,
+    map: groundTexture,
+    aoMap: aormMap,
+    displacementScale: 0.3,
+    flatShading: true
+});
+const lowResTexture = groundTexture.clone();
+lowResTexture.minFilter = THREE.LinearMipMapLinearFilter;
+lowResTexture.magFilter = THREE.LinearFilter;
+lowResTexture.anisotropy = 2; 
+const lowDetailMaterial = new THREE.MeshPhongMaterial({    
+    side: THREE.DoubleSide,
+    map: lowResTexture,
+    flatShading: true
+});
+const underPlaneMaterial= lowDetailMaterial.clone();
+underPlaneMaterial.map.wrapS = THREE.RepeatWrapping;  // Horizontal repeat
+underPlaneMaterial.map.wrapT = THREE.RepeatWrapping;  // Vertical repeat
 
-// const groundTexture = textureLoader.load('ground2/rocky_terrain_diff_4k.jpg'); // Replace with your texture path
-// const normalMap = exrLoader.load('ground2/rocky_terrain_nor_gl_4k.exr');
-// const roughnessMap = exrLoader.load('ground2/rocky_terrain_rough_4k.exr');
-// const heightMap = textureLoader.load('ground2/rocky_terrain_disp_4k.png');
-const textures = [groundTexture, normalMap, aormMap, heightMap];
-textures.forEach((texture) => {
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-
-    // Set the repeat to 1, which means the texture will be applied once
-    texture.repeat.set(1, 1);
-
-    // Enable mipmaps for better performance
-    texture.generateMipmaps = true;
-    texture.minFilter = THREE.LinearMipmapLinearFilter; // Use mipmaps for scaling
-    texture.magFilter = THREE.LinearFilter;
-  });
-
+underPlaneMaterial.map.repeat.set(10, 10);
+const underPlane =new THREE.Mesh( new THREE.PlaneGeometry(planeWidth,planeHeight,1,1),underPlaneMaterial);  
+underPlane.rotation.x = -Math.PI / 2;
+underPlane.position.y = 0.15;
+scene.add(underPlane);
 
 function createGroundTile(x, z, resolution) {
     const geometry = new THREE.PlaneGeometry(tileWidth, tileHeight, resolution, resolution);
-    const material = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        side: THREE.DoubleSide,
-        displacementMap: heightMap,
-        normalMap: normalMap,
-        map: groundTexture,
-        aoMap: aormMap,
-        displacementScale: 0.3,
-        flatShading: true
-    });
-
-    const tile = new THREE.Mesh(geometry, material);
-    const baseOverlap = 0.01;  // Minimum overlap
-    const overlapFactor = 0.1;  // Overlap factor to increase as distance increases
-    
-    // Calculate distance from origin (or another point) to determine overlap
-    const distanceFromOrigin = Math.sqrt(x * x + z * z); // Distance to (0, 0)
-    const dynamicOverlap = baseOverlap + distanceFromOrigin * overlapFactor;
-    tile.position.set(x<0?x + dynamicOverlap:x-dynamicOverlap, 0, z<0?z + dynamicOverlap:z-dynamicOverlap);  // Apply overlap to both x and z
-
+    const tile = new THREE.Mesh(geometry, lowDetailMaterial.clone());
+    tile.position.set(x,0,z);  // Apply overlap to both x and z
     tile.rotation.x = -Math.PI / 2;  // Rotate the tile to make it horizontal
     tile.receiveShadow = true;
-
+    tile.currentResolution = resolution;
+    tile.isHighDetail = false;
+    tile.visible=false;
     return tile;
 }
 // Create a grid of ground tiles
 for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
         const tile = createGroundTile(
-            j * tileWidth - planeWidth / 2,  // x position: space tiles horizontally across columns
-            i * tileHeight - planeHeight / 2,  // z position: space tiles vertically across rows
-            2  // Start with a lower resolution for all tiles initially
+            j * tileWidth - (planeWidth / 2) + (tileWidth / 2),
+            i * tileHeight - (planeHeight / 2) + (tileHeight / 2),
+            1  // Start with a lower resolution for all tiles initially
         );
         groundTiles.push(tile);
         scene.add(tile);
@@ -221,23 +222,35 @@ for (let i = 0; i < rows; i++) {
 }
 
 function updateGroundGeometry() {
-    groundTiles.forEach(tile => {        
-        const distanceToTile = orbit.position.distanceTo(tile.position);
-        let resolution = 1;        
-        if (distanceToTile < 10) {
-            resolution = 64;  // High resolution for nearby tiles
-        } else if (distanceToTile < 20) {
-            resolution = 16;  // Medium resolution for mid-range tiles
+    groundTiles.forEach(tile => {
+        const distance = orbit.position.distanceTo(tile.position);
+
+        let desiredResolution=1;        
+        let needsHighDetail=false;
+        if (distance < 20) {
+            desiredResolution = 32;         
+            needsHighDetail=true;
         }
-        // Only update the tile's geometry if the resolution has changed
-        if (tile.geometry.parameters.width !== resolution) {
-            const newGeometry = new THREE.PlaneGeometry(tileWidth, tileHeight, resolution, resolution);
-            tile.geometry.dispose();  
+        // Only update geometry if resolution changed
+        if (tile.currentResolution !== desiredResolution) {
+            const newGeometry = new THREE.PlaneGeometry(tileWidth, tileHeight, desiredResolution, desiredResolution);
+            tile.geometry.dispose();
             tile.geometry = newGeometry;
+            tile.currentResolution = desiredResolution;
+        }
+
+        // Only update material if detail level changed
+        if (needsHighDetail && !tile.isHighDetail) {
+            tile.material = highDetailMaterial;
+            tile.isHighDetail = true;
+            tile.visible=true;
+        }else if (!needsHighDetail && tile.isHighDetail) {
+            tile.material = lowDetailMaterial;
+            tile.isHighDetail = false;
+            tile.visible=false;
         }
     });
 }
-
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
 let keys = {
