@@ -148,13 +148,14 @@ button:after {
 }
 
 .progress-striped .progress-bar {
-  animation: progressAnimationStrike 2s linear infinite;
+  animation: progressAnimationStrike 1s linear infinite;
 }
+
 @keyframes progressAnimationStrike {
   0% {
     background-position: 0 0;
   }
   100% {
-    background-position: 40px 0;
+    background-position: 20px 0;
   }
 }

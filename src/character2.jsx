@@ -20,7 +20,8 @@ document.documentElement.style.height = '100%';
 const scene = new THREE.Scene();
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
-const light = new THREE.DirectionalLight(0xffffff, 1);
+const highResLight = new THREE.DirectionalLight(0xffffff, 0.5);
+
 //scene.background = new THREE.Color('white');
 const loadingManager = new THREE.LoadingManager();
 let orbit = new THREE.Object3D();
@@ -65,27 +66,56 @@ loadingManager.onError = function (url) {
 };
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-light.position.set(5, 10, 5);
-light.target.position.set(0, 0, 0);
-light.castShadow = true;
-light.shadowDarkness = 0.8;
-light.shadowCameraVisible = true; // only for debugging
+highResLight.position.set(5, 10, 5);
+highResLight.target.position.set(0, 0, 0);
+highResLight.shadowCameraVisible = true; // only for debugging
+const lowResLight = highResLight.clone();
 // these six values define the boundaries of the yellow box seen above
-light.shadow.camera.left = -2;
-light.shadow.camera.right = 2;
-light.shadow.camera.top = 2;
-light.shadow.camera.bottom = -2;
-light.shadow.mapSize.width = 512;
-light.shadow.mapSize.height = 512;
-light.shadow.camera.near = 5;
-light.shadow.camera.far = 15; 
-light.shadow.bias = -0.003;
+
+let highResShadowCamera = {
+    left: -10,
+    right: 10,
+    top: 10,
+    bottom: -10,
+    near: 0.1,
+    far: 30,
+    width: 512,
+    height: 512,
+    bias : -0.01,
+    darkness: 0.8,
+    castShadow : true,
+};
+let lowResShadowCamera = {
+    left: -35,
+    right: 35,
+    top: 35,
+    bottom: -35,
+    near: 0.1,
+    far: 70,
+    width: 512,
+    height: 512,
+    bias : -0.001,
+    darkness: 1,
+    castShadow : true,
+};
+highResLight.shadow.mapSize.width = highResShadowCamera.width;
+highResLight.shadow.mapSize.height = highResShadowCamera.height;
+highResLight.shadow.bias = highResShadowCamera.bias;
+highResLight.shadowDarkness = highResShadowCamera.darkness;
+highResLight.castShadow=highResShadowCamera.castShadow;
+
+lowResLight.shadow.mapSize.width = lowResShadowCamera.width;
+lowResLight.shadow.mapSize.height = lowResShadowCamera.height;
+lowResLight.shadow.bias = lowResShadowCamera.bias;
+lowResLight.shadowDarkness = lowResShadowCamera.darkness;
+lowResLight.castShadow=lowResShadowCamera.castShadow;
 //renderer.setSize(3 * window.innerWidth / 4, 3 * window.innerHeight / 4);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 // light.position.set(5, 10, 5); // Position of the light
 // light.castShadow = true;
-scene.add(light);
+scene.add(lowResLight);
+scene.add(highResLight);
 //scene.add(new THREE.CameraHelper(light.shadow.camera)) 
 // Load a custom model (e.g., myModel.glb)
 const loader = new GLTFLoader(loadingManager);
@@ -112,8 +142,7 @@ loader.load('characterAnimations.glb', (gltf) => {
           child.castShadow = true;
         }
      });
-    mixer = new THREE.AnimationMixer(obj);        
-    
+    mixer = new THREE.AnimationMixer(obj);
     idleAnimation = mixer.clipAction( gltf.animations[0], obj);
     jumpAnimation = mixer.clipAction( gltf.animations[1], obj);
     runAnimation= mixer.clipAction( gltf.animations[2], obj);
@@ -130,7 +159,18 @@ loader.load('characterAnimations.glb', (gltf) => {
 }, undefined, (error) => {    
     console.error('Error loading model:', error);
 });
-
+loader.load('road_sign1.glb', function(gltf) {   
+    //const lod = new THREE.LOD();
+    gltf.scene.traverse(function (child) {
+        if (child.isMesh) {
+            console.log(child);
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+     }); 
+    gltf.scene.position.z = -2;
+    scene.add(gltf.scene);     
+});
 
 // Load texture
  const textureLoader = new THREE.TextureLoader(loadingManager);
@@ -194,7 +234,8 @@ underPlaneMaterial.map.wrapT = THREE.RepeatWrapping;  // Vertical repeat
 underPlaneMaterial.map.repeat.set(10, 10);
 const underPlane =new THREE.Mesh( new THREE.PlaneGeometry(planeWidth,planeHeight,1,1),underPlaneMaterial);  
 underPlane.rotation.x = -Math.PI / 2;
-underPlane.position.y = 0.15;
+underPlane.position.y = 0.13;
+underPlane.receiveShadow = true;
 scene.add(underPlane);
 
 function createGroundTile(x, z, resolution) {
@@ -435,21 +476,31 @@ function updateOrbitPosition(){
 }
 
 function updateLightPosition() {
-    light.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
-    light.target.position.copy(obj.position);
-    light.target.updateMatrixWorld();
-
+    highResLight.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
+    highResLight.target.position.copy(obj.position);
+    highResLight.target.updateMatrixWorld();
+    lowResLight.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
+    lowResLight.target.position.copy(obj.position);
+    lowResLight.target.updateMatrixWorld();
     // Move shadow camera with the object — center frustum around object
-    const shadowCam = light.shadow.camera;
-    shadowCam.left = -10;
-    shadowCam.right = 10;
-    shadowCam.top = 10;
-    shadowCam.bottom = -10;
-    shadowCam.near = 1;
-    shadowCam.far = 30;
+    const highResShadowCam = highResLight.shadow.camera;
+    highResShadowCam.left = highResShadowCamera.left;
+    highResShadowCam.right = highResShadowCamera.right;
+    highResShadowCam.top = highResShadowCamera.top;
+    highResShadowCam.bottom = highResShadowCamera.bottom;
+    highResShadowCam.near = highResShadowCamera.near;
+    highResShadowCam.far = highResShadowCamera.far;
+    const lowResShadowCam = lowResLight.shadow.camera;
+    lowResShadowCam.left = lowResShadowCamera.left;
+    lowResShadowCam.right = lowResShadowCamera.right;
+    lowResShadowCam.top = lowResShadowCamera.top;
+    lowResShadowCam.bottom = lowResShadowCamera.bottom;
+    lowResShadowCam.near = lowResShadowCamera.near;
+    lowResShadowCam.far = lowResShadowCamera.far;
 
     // Make sure the projection matrix updates
-    shadowCam.updateProjectionMatrix();
+    lowResShadowCam.updateProjectionMatrix();
+    highResShadowCam.updateProjectionMatrix();
 }
 
 function moveForwardBackward(moveSpeed){
