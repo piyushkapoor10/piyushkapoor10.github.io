@@ -20,8 +20,9 @@ document.documentElement.style.height = '100%';
 const scene = new THREE.Scene();
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
-const highResLight = new THREE.DirectionalLight(0xffffff, 0.5);
-
+const highResLight = new THREE.DirectionalLight(0xffffff, 1);
+const ambientLight = new THREE.AmbientLight(0xFFB0FE, 0.8); // color, intensity
+scene.add(ambientLight);
 //scene.background = new THREE.Color('white');
 const loadingManager = new THREE.LoadingManager();
 let orbit = new THREE.Object3D();
@@ -68,55 +69,33 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 highResLight.position.set(5, 10, 5);
 highResLight.target.position.set(0, 0, 0);
-highResLight.shadowCameraVisible = true; // only for debugging
-const lowResLight = highResLight.clone();
+highResLight.shadowCameraVisible = true;
 // these six values define the boundaries of the yellow box seen above
 
 let highResShadowCamera = {
-    left: -10,
-    right: 10,
-    top: 10,
-    bottom: -10,
-    near: 0.1,
-    far: 30,
-    width: 512,
-    height: 512,
-    bias : -0.01,
-    darkness: 0.8,
-    castShadow : true,
-};
-let lowResShadowCamera = {
-    left: -35,
-    right: 35,
-    top: 35,
-    bottom: -35,
-    near: 0.1,
-    far: 70,
-    width: 512,
-    height: 512,
+    left: -22,
+    right: 22,
+    top: 22,
+    bottom: -22,
+    near: 0.01,
+    far: 44,
+    width: 1024,
+    height: 1024,
     bias : -0.001,
-    darkness: 1,
     castShadow : true,
 };
 highResLight.shadow.mapSize.width = highResShadowCamera.width;
 highResLight.shadow.mapSize.height = highResShadowCamera.height;
 highResLight.shadow.bias = highResShadowCamera.bias;
-highResLight.shadowDarkness = highResShadowCamera.darkness;
 highResLight.castShadow=highResShadowCamera.castShadow;
-
-lowResLight.shadow.mapSize.width = lowResShadowCamera.width;
-lowResLight.shadow.mapSize.height = lowResShadowCamera.height;
-lowResLight.shadow.bias = lowResShadowCamera.bias;
-lowResLight.shadowDarkness = lowResShadowCamera.darkness;
-lowResLight.castShadow=lowResShadowCamera.castShadow;
 //renderer.setSize(3 * window.innerWidth / 4, 3 * window.innerHeight / 4);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 // light.position.set(5, 10, 5); // Position of the light
 // light.castShadow = true;
-scene.add(lowResLight);
+
 scene.add(highResLight);
-//scene.add(new THREE.CameraHelper(light.shadow.camera)) 
+//scene.add(new THREE.CameraHelper(highResLight.shadow.camera)) 
 // Load a custom model (e.g., myModel.glb)
 const loader = new GLTFLoader(loadingManager);
 let obj;
@@ -159,7 +138,7 @@ loader.load('characterAnimations.glb', (gltf) => {
 }, undefined, (error) => {    
     console.error('Error loading model:', error);
 });
-loader.load('road_sign1.glb', function(gltf) {   
+loader.load('road_sign.glb', function(gltf) {   
     //const lod = new THREE.LOD();
     gltf.scene.traverse(function (child) {
         if (child.isMesh) {
@@ -216,15 +195,20 @@ const highDetailMaterial = new THREE.MeshPhongMaterial({
     map: groundTexture,
     aoMap: aormMap,
     displacementScale: 0.3,
-    flatShading: true
+    flatShading: true,
 });
 const lowResTexture = groundTexture.clone();
 lowResTexture.minFilter = THREE.LinearMipMapLinearFilter;
 lowResTexture.magFilter = THREE.LinearFilter;
 lowResTexture.anisotropy = 2; 
+const lowResAO = aormMap.clone();
+lowResAO.minFilter = THREE.LinearMipMapLinearFilter;
+lowResAO.magFilter = THREE.LinearFilter;
+lowResAO.anisotropy = 2; 
 const lowDetailMaterial = new THREE.MeshPhongMaterial({    
     side: THREE.DoubleSide,
     map: lowResTexture,
+    aoMap: aormMap,
     flatShading: true
 });
 const underPlaneMaterial= lowDetailMaterial.clone();
@@ -479,9 +463,6 @@ function updateLightPosition() {
     highResLight.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
     highResLight.target.position.copy(obj.position);
     highResLight.target.updateMatrixWorld();
-    lowResLight.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
-    lowResLight.target.position.copy(obj.position);
-    lowResLight.target.updateMatrixWorld();
     // Move shadow camera with the object — center frustum around object
     const highResShadowCam = highResLight.shadow.camera;
     highResShadowCam.left = highResShadowCamera.left;
@@ -490,16 +471,6 @@ function updateLightPosition() {
     highResShadowCam.bottom = highResShadowCamera.bottom;
     highResShadowCam.near = highResShadowCamera.near;
     highResShadowCam.far = highResShadowCamera.far;
-    const lowResShadowCam = lowResLight.shadow.camera;
-    lowResShadowCam.left = lowResShadowCamera.left;
-    lowResShadowCam.right = lowResShadowCamera.right;
-    lowResShadowCam.top = lowResShadowCamera.top;
-    lowResShadowCam.bottom = lowResShadowCamera.bottom;
-    lowResShadowCam.near = lowResShadowCamera.near;
-    lowResShadowCam.far = lowResShadowCamera.far;
-
-    // Make sure the projection matrix updates
-    lowResShadowCam.updateProjectionMatrix();
     highResShadowCam.updateProjectionMatrix();
 }
 
