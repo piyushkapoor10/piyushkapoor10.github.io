@@ -65,6 +65,8 @@ loadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
 loadingManager.onError = function (url) {
     console.error('Error loading resource:', url);
 };
+const shadowColor = 0x352C27;
+const shadowOpacity = 0.7;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 highResLight.position.set(5, 10, 5);
@@ -73,14 +75,14 @@ highResLight.shadowCameraVisible = true;
 // these six values define the boundaries of the yellow box seen above
 
 let highResShadowCamera = {
-    left: -22,
-    right: 22,
-    top: 22,
-    bottom: -22,
+    left: -11,
+    right: 11,
+    top: 11,
+    bottom: -11,
     near: 0.01,
-    far: 44,
-    width: 1024,
-    height: 1024,
+    far: 22,
+    width: 512,
+    height: 512,
     bias : -0.001,
     castShadow : true,
 };
@@ -138,23 +140,12 @@ loader.load('characterAnimations.glb', (gltf) => {
 }, undefined, (error) => {    
     console.error('Error loading model:', error);
 });
-loader.load('road_sign.glb', function(gltf) {   
-    //const lod = new THREE.LOD();
-    gltf.scene.traverse(function (child) {
-        if (child.isMesh) {
-            console.log(child);
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-     }); 
-    gltf.scene.position.z = -2;
-    scene.add(gltf.scene);     
-});
+
 
 // Load texture
  const textureLoader = new THREE.TextureLoader(loadingManager);
  const exrLoader = new EXRLoader(loadingManager);
-
+ 
  textureLoader.load('sky_41_2k.png', function (texture) {
     texture.mapping = THREE.EquirectangularReflectionMapping;
     scene.background = texture;
@@ -276,6 +267,54 @@ function updateGroundGeometry() {
         }
     });
 }
+
+loader.load('road_sign.glb', function(gltf) {       
+    const shadowTexture = new THREE.TextureLoader().load('shadows/road_sign_shadow.png');
+    // Create a transparent material with the shadow image
+    const shadowMaterial = new THREE.MeshBasicMaterial({
+        map: shadowTexture,
+        color: new THREE.Color(shadowColor),
+        transparent: true,     // Enable PNG transparency
+        depthWrite: false,     // Prevent z-fighting with ground
+        opacity: shadowOpacity,           // Optional: control shadow darkness
+    });
+    // Create a plane geometry for the shadow
+    const shadowPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2), // Adjust size as needed
+        shadowMaterial
+    );
+    // Position the shadow plane slightly above the ground to avoid z-fighting
+    shadowPlane.rotation.x = -Math.PI / 2;
+    shadowPlane.rotation.z = -Math.PI / 3;
+    shadowPlane.position.y = 0.4; // Just above the ground
+    shadowPlane.position.z = -2.5;
+    shadowPlane.position.x = -0.9;
+    const raycaster = new THREE.Raycaster();
+    const origin = shadowPlane.position.clone();
+    const direction = new THREE.Vector3(0, -1, 0); // Downward
+    raycaster.set(origin, direction);
+    const visibleTiles = groundTiles.filter(tile => tile.visible); // Only check visible/high-detail tiles
+    const intersects = raycaster.intersectObjects(visibleTiles);
+    if (intersects.length > 0) {
+        const hit = intersects[0];  // First intersection found
+        shadowPlane.position.copy(hit.point).addScaledVector(hit.face.normal, 0.01);  // Move slightly above hit point
+
+        // Align shadow to ground's surface normal (if needed)
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+        const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+
+        // Align the shadow plane to match ground slope
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0),  // Default up direction
+            worldNormal
+        );
+        shadowPlane.quaternion.copy(quaternion);
+    }
+    scene.add(shadowPlane);
+    gltf.scene.position.z = -2;
+    scene.add(gltf.scene);     
+});
+
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
 let keys = {
