@@ -23,18 +23,10 @@ const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerH
 const highResLight = new THREE.DirectionalLight(0xffffff, 1);
 const ambientLight = new THREE.AmbientLight(0xFFB0FE, 0.8); // color, intensity
 scene.add(ambientLight);
-//scene.background = new THREE.Color('white');
 const loadingManager = new THREE.LoadingManager();
 let orbit = new THREE.Object3D();
 
-// const axesHelper = new THREE.AxesHelper(5);
-// scene.add(axesHelper);
-
-let isPointerLocked = false;
-// When everything is loaded, start the animation
 loadingManager.onLoad = function() {
-     // Start the animation after everything is loaded
-    //document.getElementById("loading-container").style.display = "none";
     const progressBar = document.querySelector('.progress');
     const loadingText = document.querySelector('.loading-text');
     if (progressBar && loadingText) {
@@ -47,8 +39,7 @@ loadingManager.onLoad = function() {
 };
 
 loadingManager.onStart = function (url, itemsLoaded, itemsTotal) {
-    document.getElementById("loading-container").style.display = "block"; // Show loading bar
-    //console.log('Started loading:', url);
+    document.getElementById("loading-container").style.display = "block";
 };
 
 
@@ -65,8 +56,9 @@ loadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
 loadingManager.onError = function (url) {
     console.error('Error loading resource:', url);
 };
-const shadowColor = 0x352C27;
-const shadowOpacity = 0.7;
+
+const shadowColor = 0x170117;
+const shadowOpacity = 0.55;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 highResLight.position.set(5, 10, 5);
@@ -286,30 +278,9 @@ loader.load('road_sign.glb', function(gltf) {
     // Position the shadow plane slightly above the ground to avoid z-fighting
     shadowPlane.rotation.x = -Math.PI / 2;
     shadowPlane.rotation.z = -Math.PI / 3;
-    shadowPlane.position.y = 0.4; // Just above the ground
+    shadowPlane.position.y = 0.2175; // Just above the ground
     shadowPlane.position.z = -2.5;
     shadowPlane.position.x = -0.9;
-    const raycaster = new THREE.Raycaster();
-    const origin = shadowPlane.position.clone();
-    const direction = new THREE.Vector3(0, -1, 0); // Downward
-    raycaster.set(origin, direction);
-    const visibleTiles = groundTiles.filter(tile => tile.visible); // Only check visible/high-detail tiles
-    const intersects = raycaster.intersectObjects(visibleTiles);
-    if (intersects.length > 0) {
-        const hit = intersects[0];  // First intersection found
-        shadowPlane.position.copy(hit.point).addScaledVector(hit.face.normal, 0.01);  // Move slightly above hit point
-
-        // Align shadow to ground's surface normal (if needed)
-        const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-        const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
-
-        // Align the shadow plane to match ground slope
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(
-            new THREE.Vector3(0, 1, 0),  // Default up direction
-            worldNormal
-        );
-        shadowPlane.quaternion.copy(quaternion);
-    }
     scene.add(shadowPlane);
     gltf.scene.position.z = -2;
     scene.add(gltf.scene);     
