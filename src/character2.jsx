@@ -375,9 +375,7 @@ const isLandscape = () => window.innerWidth > window.innerHeight;
 
 document.addEventListener('touchstart', (e) => {
     if (!isLandscape()) return;
-    if (e.touches.length > 1) {
-        e.preventDefault(); // Prevent pinch zoom
-    }    
+    e.preventDefault(); // Prevent pinch zoom        
     for (let touch of e.changedTouches) {
         const midX = window.innerWidth / 2;
 
@@ -398,9 +396,7 @@ document.addEventListener('touchstart', (e) => {
 
 document.addEventListener('touchmove', (e) => {
     if (!isLandscape()) return;
-    if (e.touches.length > 1) {
-        e.preventDefault(); // Prevent pinch zoom
-    }
+    e.preventDefault();
     for (let touch of e.changedTouches) {
         const id = touch.identifier;
 
