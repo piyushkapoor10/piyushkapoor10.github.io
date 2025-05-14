@@ -490,11 +490,13 @@ document.addEventListener('touchend', (e) => {
 });
 
 function showOrientationMessage() {
-    // Create a message div dynamically
+    if (document.getElementById('orientationMessage')) return; // Prevent duplicates
+
     const messageDiv = document.createElement('div');
     messageDiv.textContent = 'Please switch to landscape mode for a better experience.';
     messageDiv.id = 'orientationMessage';
-    // Apply styles dynamically to the message
+
+    // Styling
     messageDiv.style.position = 'fixed';
     messageDiv.style.top = '20px';
     messageDiv.style.left = '50%';
@@ -506,19 +508,13 @@ function showOrientationMessage() {
     messageDiv.style.borderRadius = '5px';
     messageDiv.style.zIndex = '1000';
 
-    // Add the message to the body of the document
     document.body.appendChild(messageDiv);
-
-    // Store the message div in a global variable for later removal
-    window.orientationMessage = messageDiv;
 }
 
 function hideOrientationMessage() {
     const messageDiv = document.getElementById('orientationMessage');
     if (messageDiv) {
-        messageDiv.remove();  // Remove the message div from the DOM
-    } else {
-        console.log("Message div not found.");
+        messageDiv.remove();
     }
 }
 
@@ -772,3 +768,4 @@ document.addEventListener('keydown', function(e) {
     }
 });
 window.addEventListener('load', checkOrientation);
+window.addEventListener('orientationchange', checkOrientation);
