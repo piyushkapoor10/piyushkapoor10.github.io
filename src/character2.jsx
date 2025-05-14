@@ -365,141 +365,121 @@ document.addEventListener('keyup', (event) => {
     }
 });
 
-let startX = 0, startY = 0, swiped = false, shift = false;
-let lastTouchX = 0, lastTouchY = 0;
-let scale = -0.01; 
+let leftTouchId = null;
+let rightTouchId = null;
+let leftStartX = 0, leftStartY = 0, leftSwiped = false;
+let rightLastX = 0, rightLastY = 0;
+let shift = false;
+let scale = -0.01;
+
+const isLandscape = () => window.innerWidth > window.innerHeight;
 
 document.addEventListener('touchstart', (e) => {
-    if (!isLandscape()) return;  // Disable swipe controls if not in landscape
-    const touch = e.touches[0];
-    const screenMidX = window.innerWidth / 2;
-    if (touch.pageX <= screenMidX) {
-        // Left half swipe detection
-        startX = touch.pageX;
-        startY = touch.pageY;
-        swiped = false;
-        shift = false;
-    } else {
-        // Right half movement detection
-        lastTouchX = touch.pageX;
-        lastTouchY = touch.pageY;
+    if (!isLandscape()) return;
+
+    for (let touch of e.changedTouches) {
+        const midX = window.innerWidth / 2;
+
+        if (touch.pageX <= midX && leftTouchId === null) {
+            // Left-side touch (swipe)
+            leftTouchId = touch.identifier;
+            leftStartX = touch.pageX;
+            leftStartY = touch.pageY;
+            leftSwiped = false;
+            shift = false;
+        } else if (touch.pageX > midX && rightTouchId === null) {
+            // Right-side touch (camera)
+            rightTouchId = touch.identifier;
+            rightLastX = touch.pageX;
+            rightLastY = touch.pageY;
+        }
     }
 });
-
-function isLandscape() {
-    return window.innerWidth > window.innerHeight;
-}
 
 document.addEventListener('touchmove', (e) => {
-    if (!isLandscape()) return;  // Disable swipe controls if not in landscape
+    if (!isLandscape()) return;
 
-    const touch = e.touches[0];
-    const screenMidX = window.innerWidth / 2;
+    for (let touch of e.changedTouches) {
+        const id = touch.identifier;
 
-    if (touch.pageX <= screenMidX) {
-        // Left half swipe logic
-        if (swiped) return; // Prevent multiple swipe detections
+        if (id === leftTouchId) {
+            const diffX = touch.pageX - leftStartX;
+            const diffY = touch.pageY - leftStartY;
+            const threshold = 30;
 
-        const diffX = touch.pageX - startX;
-        const diffY = touch.pageY - startY;
-        const threshold = 30;
-        const swipeDistance = Math.sqrt(Math.pow(diffX, 2) + Math.pow(diffY, 2));
+            const absX = Math.abs(diffX);
+            const absY = Math.abs(diffY);
 
-        if (swipeDistance > 100) {
-            shift = true; // Long swipe, activate shift flag
-        }
+            // Reset all directions first
+            keys.left = false;
+            keys.right = false;
+            keys.up = false;
+            keys.down = false;
 
-        // Horizontal swipe (left or right)
-        if (Math.abs(diffX) > Math.abs(diffY)) {
-            if (diffX > threshold) {
-                keys.right = true;
-                keys.left = false;
-                keys.up = false;
-                keys.down = false;
-                swiped = true;
-            } else if (diffX < -threshold) {
-                keys.left = true;
-                keys.right = false;
-                keys.up = false;
-                keys.down = false;
-                swiped = true;
+            if (absX > threshold || absY > threshold) {
+                if (absX > threshold && absY > threshold) {
+                    // Diagonal swipe
+                    if (diffX > 0 && diffY < 0) {       // ↗
+                        keys.right = true;
+                        keys.up = true;
+                    } else if (diffX < 0 && diffY < 0) { // ↖
+                        keys.left = true;
+                        keys.up = true;
+                    } else if (diffX > 0 && diffY > 0) { // ↘
+                        keys.right = true;
+                        keys.down = true;
+                    } else if (diffX < 0 && diffY > 0) { // ↙
+                        keys.left = true;
+                        keys.down = true;
+                    }
+                } else if (absX > absY) {
+                    // Horizontal swipe
+                    if (diffX > threshold) {
+                        keys.right = true;
+                    } else if (diffX < -threshold) {
+                        keys.left = true;
+                    }
+                } else {
+                    // Vertical swipe
+                    if (diffY > threshold) {
+                        keys.down = true;
+                    } else if (diffY < -threshold) {
+                        keys.up = true;
+                    }
+                }
             }
-        } else {
-            // Vertical swipe (up or down)
-            if (diffY > threshold) {
-                keys.down = true;
-                keys.up = false;
-                keys.left = false;
-                keys.right = false;
-                swiped = true;
-            } else if (diffY < -threshold) {
-                keys.up = true;
-                keys.down = false;
-                keys.left = false;
-                keys.right = false;
-                swiped = true;
-            }
+        } else if (id === rightTouchId) {
+            // Camera rotation
+            const diffX = touch.pageX - rightLastX;
+            const diffY = touch.pageY - rightLastY;
+
+            orbit.rotateY(diffX * scale);
+            orbit.rotateX(diffY * scale);
+            orbit.rotation.z = 0;
+
+            const minRotationX = -Math.PI / 3;
+            const maxRotationX = Math.PI / 16;
+            orbit.rotation.x = Math.max(minRotationX, Math.min(maxRotationX, orbit.rotation.x));
+
+            rightLastX = touch.pageX;
+            rightLastY = touch.pageY;
         }
-
-        // Handle diagonal swipes
-        if (Math.abs(diffX) > threshold && Math.abs(diffY) > threshold) {
-            if (diffX > 0 && diffY < 0) {
-                keys.right = true;
-                keys.up = true;
-                keys.left = false;
-                keys.down = false;
-                swiped = true;
-            } else if (diffX < 0 && diffY < 0) {
-                keys.left = true;
-                keys.up = true;
-                keys.right = false;
-                keys.down = false;
-                swiped = true;
-            } else if (diffX > 0 && diffY > 0) {
-                keys.right = true;
-                keys.down = true;
-                keys.left = false;
-                keys.up = false;
-                swiped = true;
-            } else if (diffX < 0 && diffY > 0) {
-                keys.left = true;
-                keys.down = true;
-                keys.right = false;
-                keys.up = false;
-                swiped = true;
-            }
-        }
-    } else {
-        // Right half movement logic for camera rotation
-        const diffX = touch.pageX - lastTouchX;
-        const diffY = touch.pageY - lastTouchY;
-
-        // Apply movement to orbit camera (rotation)
-        orbit.rotateY(diffX * scale);  // Horizontal rotation (Y axis)
-        orbit.rotateX(diffY * scale);  // Vertical rotation (X axis)
-        orbit.rotation.z = 0; // Keep the camera level by locking the Z-axis rotation
-
-        // Optional: Restrict the rotation on the X axis (for pitch limit)
-        const minRotationX = -Math.PI / 3;  // Minimum pitch
-        const maxRotationX = Math.PI / 16;   // Maximum pitch
-        orbit.rotation.x = Math.max(minRotationX, Math.min(maxRotationX, orbit.rotation.x));
-
-        // Update last positions for the next move
-        lastTouchX = touch.pageX;
-        lastTouchY = touch.pageY;
     }
 });
 
+document.addEventListener('touchend', (e) => {
+    if (!isLandscape()) return;
 
-document.addEventListener('touchend', () => {
-    if (!isLandscape()) return;  // Disable swipe controls if not in landscape
-
-    // Reset all keys when the touch ends
-    keys.left = false;
-    keys.right = false;
-    keys.up = false;
-    keys.down = false;
-    swiped = false;
+    for (let touch of e.changedTouches) {
+        if (touch.identifier === leftTouchId) {
+            keys.left = keys.right = keys.up = keys.down = false;
+            leftTouchId = null;
+            leftSwiped = false;
+        }
+        if (touch.identifier === rightTouchId) {
+            rightTouchId = null;
+        }
+    }
 });
 
 function showOrientationMessage() {
