@@ -228,32 +228,25 @@ for (let i = 0; i < rows; i++) {
         scene.add(tile);
     }
 }
-
 function updateGroundGeometry() {
     groundTiles.forEach(tile => {
         const distance = orbit.position.distanceTo(tile.position);
-
         let desiredResolution=1;        
-        let needsHighDetail=false;
+        //let needsHighDetail=false;
         if (distance < 20) {
-            desiredResolution = 32;         
-            needsHighDetail=true;
-        }
-        // Only update geometry if resolution changed
-        if (tile.currentResolution !== desiredResolution) {
-            const newGeometry = new THREE.PlaneGeometry(tileWidth, tileHeight, desiredResolution, desiredResolution);
+            if(!tile.isHighDetail){
+                desiredResolution = 32;         
+                //needsHighDetail=true;
+                const newGeometry = new THREE.PlaneGeometry(tileWidth, tileHeight, desiredResolution, desiredResolution);
+                tile.geometry.dispose();
+                tile.geometry = newGeometry;
+                tile.currentResolution = desiredResolution;
+                tile.material = highDetailMaterial;
+                tile.isHighDetail = true;
+                tile.visible=true;
+            }
+        }else{
             tile.geometry.dispose();
-            tile.geometry = newGeometry;
-            tile.currentResolution = desiredResolution;
-        }
-
-        // Only update material if detail level changed
-        if (needsHighDetail && !tile.isHighDetail) {
-            tile.material = highDetailMaterial;
-            tile.isHighDetail = true;
-            tile.visible=true;
-        }else if (!needsHighDetail && tile.isHighDetail) {
-            tile.material = lowDetailMaterial;
             tile.isHighDetail = false;
             tile.visible=false;
         }
@@ -371,8 +364,178 @@ document.addEventListener('keyup', (event) => {
             break;
     }
 });
+document.addEventListener('touchstart', (e) => {
+    if (!isLandscape()) return;  // Disable swipe controls if not in landscape
+    const touch = e.touches[0];
+    const screenMidX = window.innerWidth / 2;
+    if (touch.pageX <= screenMidX) {
+        // Left half swipe detection
+        startX = touch.pageX;
+        startY = touch.pageY;
+        swiped = false;
+        shift = false;
+    } else {
+        // Right half movement detection
+        lastTouchX = touch.pageX;
+        lastTouchY = touch.pageY;
+    }
+});
+
+function isLandscape() {
+    return window.innerWidth > window.innerHeight;
+}
+
+document.addEventListener('touchmove', (e) => {
+    if (!isLandscape()) return;  // Disable swipe controls if not in landscape
+
+    const touch = e.touches[0];
+    const screenMidX = window.innerWidth / 2;
+
+    if (touch.pageX <= screenMidX) {
+        // Left half swipe logic
+        if (swiped) return; // Prevent multiple swipe detections
+
+        const diffX = touch.pageX - startX;
+        const diffY = touch.pageY - startY;
+        const threshold = 30;
+        const swipeDistance = Math.sqrt(Math.pow(diffX, 2) + Math.pow(diffY, 2));
+
+        if (swipeDistance > 100) {
+            shift = true; // Long swipe, activate shift flag
+        }
+
+        // Horizontal swipe (left or right)
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+            if (diffX > threshold) {
+                keys.right = true;
+                keys.left = false;
+                keys.up = false;
+                keys.down = false;
+                swiped = true;
+            } else if (diffX < -threshold) {
+                keys.left = true;
+                keys.right = false;
+                keys.up = false;
+                keys.down = false;
+                swiped = true;
+            }
+        } else {
+            // Vertical swipe (up or down)
+            if (diffY > threshold) {
+                keys.down = true;
+                keys.up = false;
+                keys.left = false;
+                keys.right = false;
+                swiped = true;
+            } else if (diffY < -threshold) {
+                keys.up = true;
+                keys.down = false;
+                keys.left = false;
+                keys.right = false;
+                swiped = true;
+            }
+        }
+
+        // Handle diagonal swipes
+        if (Math.abs(diffX) > threshold && Math.abs(diffY) > threshold) {
+            if (diffX > 0 && diffY < 0) {
+                keys.right = true;
+                keys.up = true;
+                keys.left = false;
+                keys.down = false;
+                swiped = true;
+            } else if (diffX < 0 && diffY < 0) {
+                keys.left = true;
+                keys.up = true;
+                keys.right = false;
+                keys.down = false;
+                swiped = true;
+            } else if (diffX > 0 && diffY > 0) {
+                keys.right = true;
+                keys.down = true;
+                keys.left = false;
+                keys.up = false;
+                swiped = true;
+            } else if (diffX < 0 && diffY > 0) {
+                keys.left = true;
+                keys.down = true;
+                keys.right = false;
+                keys.up = false;
+                swiped = true;
+            }
+        }
+    } else {
+        // Right half movement logic for camera rotation
+        const diffX = touch.pageX - lastTouchX;
+        const diffY = touch.pageY - lastTouchY;
+
+        // Apply movement to orbit camera (rotation)
+        orbit.rotateY(diffX * scale);  // Horizontal rotation (Y axis)
+        orbit.rotateX(diffY * scale);  // Vertical rotation (X axis)
+        orbit.rotation.z = 0; // Keep the camera level by locking the Z-axis rotation
+
+        // Optional: Restrict the rotation on the X axis (for pitch limit)
+        const minRotationX = -Math.PI / 3;  // Minimum pitch
+        const maxRotationX = Math.PI / 16;   // Maximum pitch
+        orbit.rotation.x = Math.max(minRotationX, Math.min(maxRotationX, orbit.rotation.x));
+
+        // Update last positions for the next move
+        lastTouchX = touch.pageX;
+        lastTouchY = touch.pageY;
+    }
+});
 
 
+document.addEventListener('touchend', () => {
+    if (!isLandscape()) return;  // Disable swipe controls if not in landscape
+
+    // Reset all keys when the touch ends
+    keys.left = false;
+    keys.right = false;
+    keys.up = false;
+    keys.down = false;
+    swiped = false;
+});
+
+function showOrientationMessage() {
+    // Create a message div dynamically
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = 'Please switch to landscape mode for a better experience.';
+    
+    // Apply styles dynamically to the message
+    messageDiv.style.position = 'fixed';
+    messageDiv.style.top = '20px';
+    messageDiv.style.left = '50%';
+    messageDiv.style.transform = 'translateX(-50%)';
+    messageDiv.style.padding = '10px 20px';
+    messageDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    messageDiv.style.color = 'white';
+    messageDiv.style.fontSize = '18px';
+    messageDiv.style.borderRadius = '5px';
+    messageDiv.style.zIndex = '1000';
+
+    // Add the message to the body of the document
+    document.body.appendChild(messageDiv);
+
+    // Store the message div in a global variable for later removal
+    window.orientationMessage = messageDiv;
+}
+
+function hideOrientationMessage() {
+    if (window.orientationMessage) {
+        window.orientationMessage.remove(); // Remove the message div
+        window.orientationMessage = null;   // Clear the reference
+    }
+}
+
+// Event listener for orientation change
+window.addEventListener('orientationchange', () => {
+    if (isLandscape()) {
+        hideOrientationMessage();
+    } else {
+        showOrientationMessage();
+    }
+});
 
 let animate = () => {
     let velocityY = 0; // Vertical velocity
@@ -611,5 +774,10 @@ document.addEventListener('click', function() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && document.pointerLockElement) {
         document.exitPointerLock();  // Allow the user to exit pointer lock
+    }
+});
+window.addEventListener('load', () => {
+    if (!isLandscape()) {
+        showOrientationMessage();
     }
 });
