@@ -25,7 +25,7 @@ const ambientLight = new THREE.AmbientLight(0xFFB0FE, 0.8); // color, intensity
 scene.add(ambientLight);
 const loadingManager = new THREE.LoadingManager();
 let orbit = new THREE.Object3D();
-
+let enableTouchControls=false;
 loadingManager.onLoad = function() {
     const progressBar = document.querySelector('.progress');
     const loadingText = document.querySelector('.loading-text');
@@ -36,6 +36,7 @@ loadingManager.onLoad = function() {
     document.getElementById("btn-explore").style.display = "inline-flex";
     animate();
     addOrbitControls();    
+    enableTouchControls=true;
 };
 
 loadingManager.onStart = function (url, itemsLoaded, itemsTotal) {
@@ -375,7 +376,10 @@ const isLandscape = () => window.innerWidth > window.innerHeight;
 
 document.addEventListener('touchstart', (e) => {
     if (!isLandscape()) return;
-    e.preventDefault(); // Prevent pinch zoom        
+    if(enableTouchControls){
+        e.preventDefault();
+    }
+     // Prevent pinch zoom        
     for (let touch of e.changedTouches) {
         const midX = window.innerWidth / 2;
 
@@ -396,7 +400,9 @@ document.addEventListener('touchstart', (e) => {
 
 document.addEventListener('touchmove', (e) => {
     if (!isLandscape()) return;
-    e.preventDefault();
+    if(enableTouchControls){
+        e.preventDefault();
+    }
     for (let touch of e.changedTouches) {
         const id = touch.identifier;
 
