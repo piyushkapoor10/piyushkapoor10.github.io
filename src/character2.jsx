@@ -501,7 +501,7 @@ function showOrientationMessage() {
     // Create a message div dynamically
     const messageDiv = document.createElement('div');
     messageDiv.textContent = 'Please switch to landscape mode for a better experience.';
-    
+    messageDiv.id = 'orientationMessage';
     // Apply styles dynamically to the message
     messageDiv.style.position = 'fixed';
     messageDiv.style.top = '20px';
@@ -522,20 +522,22 @@ function showOrientationMessage() {
 }
 
 function hideOrientationMessage() {
-    if (window.orientationMessage) {
-        window.orientationMessage.remove(); // Remove the message div
-        window.orientationMessage = null;   // Clear the reference
+    const messageDiv = document.getElementById('orientationMessage');
+    if (messageDiv) {
+        messageDiv.remove();  // Remove the message div from the DOM
+    } else {
+        console.log("Message div not found.");
     }
 }
 
-// Event listener for orientation change
-window.addEventListener('orientationchange', () => {
+function checkOrientation() {
+    console.log(window.orientationMessage);
     if (isLandscape()) {
         hideOrientationMessage();
     } else {
         showOrientationMessage();
     }
-});
+}
 
 let animate = () => {
     let velocityY = 0; // Vertical velocity
@@ -747,6 +749,7 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight); // Resize renderer to full screen
     camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
     camera.updateProjectionMatrix(); // Recalculate the camera projection matrix
+    checkOrientation();
 });
 
 
@@ -776,8 +779,4 @@ document.addEventListener('keydown', function(e) {
         document.exitPointerLock();  // Allow the user to exit pointer lock
     }
 });
-window.addEventListener('load', () => {
-    if (!isLandscape()) {
-        showOrientationMessage();
-    }
-});
+window.addEventListener('load', checkOrientation);
