@@ -35,8 +35,7 @@ loadingManager.onLoad = function() {
     }
     document.getElementById("btn-explore").style.display = "inline-flex";
     animate();
-    addOrbitControls();    
-    enableTouchControls=true;
+    addOrbitControls();
 };
 
 loadingManager.onStart = function (url, itemsLoaded, itemsTotal) {
@@ -757,6 +756,7 @@ document.addEventListener('mousemove', function(e){
 document.getElementById('btn-explore').addEventListener('click',()=>{
     document.getElementById('waiting-screen').classList.add('hidden');
     document.documentElement.requestPointerLock();
+    enableTouchControls=true;
 });
 document.addEventListener('click', function() {
     if(document.getElementById('waiting-screen').classList.contains('hidden'))
