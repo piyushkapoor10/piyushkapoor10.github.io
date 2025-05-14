@@ -364,6 +364,11 @@ document.addEventListener('keyup', (event) => {
             break;
     }
 });
+
+let startX = 0, startY = 0, swiped = false, shift = false;
+let lastTouchX = 0, lastTouchY = 0;
+let scale = -0.01; 
+
 document.addEventListener('touchstart', (e) => {
     if (!isLandscape()) return;  // Disable swipe controls if not in landscape
     const touch = e.touches[0];
