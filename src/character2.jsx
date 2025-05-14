@@ -369,14 +369,15 @@ let leftTouchId = null;
 let rightTouchId = null;
 let leftStartX = 0, leftStartY = 0, leftSwiped = false;
 let rightLastX = 0, rightLastY = 0;
-let shift = false;
 let scale = -0.01;
 
 const isLandscape = () => window.innerWidth > window.innerHeight;
 
 document.addEventListener('touchstart', (e) => {
     if (!isLandscape()) return;
-
+    if (e.touches.length > 1) {
+        e.preventDefault(); // Prevent pinch zoom
+    }    
     for (let touch of e.changedTouches) {
         const midX = window.innerWidth / 2;
 
@@ -386,7 +387,6 @@ document.addEventListener('touchstart', (e) => {
             leftStartX = touch.pageX;
             leftStartY = touch.pageY;
             leftSwiped = false;
-            shift = false;
         } else if (touch.pageX > midX && rightTouchId === null) {
             // Right-side touch (camera)
             rightTouchId = touch.identifier;
@@ -394,11 +394,13 @@ document.addEventListener('touchstart', (e) => {
             rightLastY = touch.pageY;
         }
     }
-});
+}, { passive: false });
 
 document.addEventListener('touchmove', (e) => {
     if (!isLandscape()) return;
-
+    if (e.touches.length > 1) {
+        e.preventDefault(); // Prevent pinch zoom
+    }
     for (let touch of e.changedTouches) {
         const id = touch.identifier;
 
@@ -406,9 +408,12 @@ document.addEventListener('touchmove', (e) => {
             const diffX = touch.pageX - leftStartX;
             const diffY = touch.pageY - leftStartY;
             const threshold = 30;
-
+            const shiftDistance = 100; // Distance required for "shift"
+            const distance = Math.hypot(diffX, diffY);
             const absX = Math.abs(diffX);
             const absY = Math.abs(diffY);
+
+            keys.run = distance > shiftDistance;
 
             // Reset all directions first
             keys.left = false;
@@ -465,7 +470,7 @@ document.addEventListener('touchmove', (e) => {
             rightLastY = touch.pageY;
         }
     }
-});
+}, { passive: false });
 
 document.addEventListener('touchend', (e) => {
     if (!isLandscape()) return;
