@@ -34,9 +34,9 @@ html {
   width: 40vw;
   position: relative;
   top: 45%;
-  -webkit-transform: translateY(-50%);
-  -moz-transform: translateY(-50%);
-  transform: translateY(-50%);
+  -webkit-transform: translateY(-55%);
+  -moz-transform: translateY(-55%);
+  transform: translateY(-55%);
   text-align: center;   
   margin: auto;  
 }
