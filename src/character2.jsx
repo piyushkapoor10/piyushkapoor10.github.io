@@ -278,12 +278,12 @@ loader.load('road_sign.glb', function(gltf) {
     gltf.scene.position.z = -2;
     scene.add(gltf.scene);     
 });
-// loader.load('accenture.glb', function(gltf) {
+loader.load('accenture.glb', function(gltf) {
     
-//     gltf.scene.position.z = -10;
-//     gltf.scene.position.y = 5;
-//     scene.add(gltf.scene);     
-// });
+    gltf.scene.position.set(-20, 5, -10);
+    gltf.scene.rotation.y = Math.PI;
+    scene.add(gltf.scene);     
+});
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
 let keys = {
