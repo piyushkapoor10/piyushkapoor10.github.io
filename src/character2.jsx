@@ -284,6 +284,12 @@ loader.load('accenture.glb', function(gltf) {
     gltf.scene.rotation.y = Math.PI;
     scene.add(gltf.scene);     
 });
+loader.load('NationalEmblem.glb', function(gltf) {
+    
+    gltf.scene.position.set(-20, 0, 0);
+    gltf.scene.rotation.y = Math.PI;
+    scene.add(gltf.scene);     
+});
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
 let keys = {
