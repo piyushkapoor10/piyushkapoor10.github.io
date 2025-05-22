@@ -20,8 +20,8 @@ document.documentElement.style.height = '100%';
 const scene = new THREE.Scene();
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
-const highResLight = new THREE.DirectionalLight(0xffffff, 1);
-const ambientLight = new THREE.AmbientLight(0xFFB0FE, 0.8); // color, intensity
+const highResLight = new THREE.DirectionalLight(0xffffff, 1.5);
+const ambientLight = new THREE.AmbientLight(0xfa87fa, 1.5); // color, intensity
 scene.add(ambientLight);
 const loadingManager = new THREE.LoadingManager();
 let orbit = new THREE.Object3D();
@@ -57,8 +57,8 @@ loadingManager.onError = function (url) {
     console.error('Error loading resource:', url);
 };
 
-const shadowColor = 0x170117;
-const shadowOpacity = 0.55;
+const shadowColor = 0x2e002e;
+const shadowOpacity = 0.6;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 highResLight.position.set(5, 10, 5);
@@ -67,14 +67,14 @@ highResLight.shadowCameraVisible = true;
 // these six values define the boundaries of the yellow box seen above
 
 let highResShadowCamera = {
-    left: -11,
-    right: 11,
-    top: 11,
-    bottom: -11,
-    near: 0.01,
-    far: 22,
-    width: 512,
-    height: 512,
+    left: -1,
+    right: 1,
+    top: 1,
+    bottom: -1,
+    near: 1,
+    far: 15,
+    width: 128,
+    height: 128,
     bias : -0.001,
     castShadow : true,
 };
@@ -279,13 +279,11 @@ loader.load('road_sign.glb', function(gltf) {
     scene.add(gltf.scene);     
 });
 loader.load('accenture.glb', function(gltf) {
-    
-    gltf.scene.position.set(-20, 5, -10);
+    gltf.scene.position.set(-20, 3.5, -10);
     gltf.scene.rotation.y = Math.PI;
     scene.add(gltf.scene);     
 });
 loader.load('NationalEmblem.glb', function(gltf) {
-    
     gltf.scene.position.set(-20, 0, 0);
     gltf.scene.rotation.y = Math.PI;
     scene.add(gltf.scene);     
@@ -633,7 +631,7 @@ function updateOrbitPosition(){
 }
 
 function updateLightPosition() {
-    highResLight.position.set(obj.position.x + 5, obj.position.y + 10, obj.position.z + 5);
+    highResLight.position.set(obj.position.x + 3, obj.position.y + 10, obj.position.z + 3);
     highResLight.target.position.copy(obj.position);
     highResLight.target.updateMatrixWorld();
     // Move shadow camera with the object — center frustum around object
