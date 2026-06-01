@@ -1,11 +1,17 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+//import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader';
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
-import normalMapImage from '/ground/moss_groud_02_Normal_gl_2k.png'
-import heightMapImage from '/ground/moss_groud_02_Height_2k.png'
-import aormhMapImage from '/ground/moss_groud_02_ao_r_m_h_2k.png'
+//import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import normalMapImage from './assets/ground/moss_groud_02_Normal_gl_2k.png'
+import heightMapImage from './assets/ground/moss_groud_02_Height_2k.png'
+import aormhMapImage from './assets/ground/moss_groud_02_ao_r_m_h_2k.png'
+import hero from './assets/characterAnimations.glb'
+import skyTexture from './assets/sky_41_2k.png'
+import roadSignTexture from './assets/road_sign.glb'
+import roadSignShadowTexture from './assets/shadows/road_sign_shadow.png'
+import ground from './assets/ground/moss_groud_02_Base_Color_2k.png'
 //import normalMapImage from '/ground/moss_groud_02_Normal_gl_2k.png'
 //import roughnessMapImage from '/ground/moss_groud_02_Roughness_2k.png'
 
@@ -18,7 +24,10 @@ document.documentElement.style.padding = 0;
 document.documentElement.style.height = '100%';
 
 const scene = new THREE.Scene();
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+let renderer = null;
+if (!renderer){
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+}
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
 const highResLight = new THREE.DirectionalLight(0xffffff, 1.5);
 const ambientLight = new THREE.AmbientLight(0xfa87fa, 1.5); // color, intensity
@@ -94,6 +103,7 @@ scene.add(highResLight);
 const loader = new GLTFLoader(loadingManager);
 let obj;
 let mixer; 
+let mixer2; 
 let walkAnimation;
 let walkBackAnimation;
 let idleAnimation;
@@ -103,11 +113,9 @@ let runJumpAnimation;
 let jumpAnimation;
 let targetQuaternion;
 
-
-loader.load('characterAnimations.glb', (gltf) => {
-    obj = gltf.scene; // The model is inside gltf.scene
-    console.log(gltf.animations);
-    scene.add(obj); // Add the model to the scene   
+loader.load(hero, (gltf) => {
+    obj = gltf.scene;
+    scene.add(obj);  
     obj.position.y = 0.2;
     obj.rotation.y = Math.PI;  
     gltf.scene.traverse(function (child) {
@@ -138,7 +146,7 @@ loader.load('characterAnimations.glb', (gltf) => {
  const textureLoader = new THREE.TextureLoader(loadingManager);
  const exrLoader = new EXRLoader(loadingManager);
  
- textureLoader.load('sky_41_2k.png', function (texture) {
+ textureLoader.load(skyTexture, function (texture) {
     texture.mapping = THREE.EquirectangularReflectionMapping;
     scene.background = texture;
     scene.environment = texture;
@@ -148,7 +156,6 @@ loader.load('characterAnimations.glb', (gltf) => {
 const planeWidth = 100;
 const planeHeight = 100;
 
-// Divide the ground into tiles (patches) - You can adjust the number of rows and columns
 const rows = 10; // Number of tiles vertically
 const cols = 10; // Number of tiles horizontally
 
@@ -157,7 +164,7 @@ const tileWidth = planeWidth / cols;
 const tileHeight = planeHeight / rows;
 const groundTiles = [];
 
-const groundTexture = textureLoader.load('ground/moss_groud_02_Base_Color_2k.png'); // Replace with your texture path
+const groundTexture = textureLoader.load(ground);
 const normalMap = textureLoader.load(normalMapImage);
 //const roughnessMap = textureLoader.load(roughnessMapImage);
 const heightMap = textureLoader.load(heightMapImage);
@@ -253,8 +260,8 @@ function updateGroundGeometry() {
     });
 }
 
-loader.load('road_sign.glb', function(gltf) {       
-    const shadowTexture = new THREE.TextureLoader().load('shadows/road_sign_shadow.png');
+loader.load(roadSignTexture, function(gltf) {       
+    const shadowTexture = new THREE.TextureLoader().load(roadSignShadowTexture);
     // Create a transparent material with the shadow image
     const shadowMaterial = new THREE.MeshBasicMaterial({
         map: shadowTexture,
@@ -283,10 +290,76 @@ loader.load('accenture.glb', function(gltf) {
     gltf.scene.rotation.y = Math.PI;
     scene.add(gltf.scene);     
 });
-loader.load('NationalEmblem.glb', function(gltf) {
-    gltf.scene.position.set(-20, 0, 0);
-    gltf.scene.rotation.y = Math.PI;
-    scene.add(gltf.scene);     
+loader.load('NationalEmblem_deconstrusted.glb', function(gltf) {
+    gltf.scene.position.set(-20, 0.2, 0);
+    mixer2 = new THREE.AnimationMixer(gltf.scene);
+    const beamMaterial=new THREE.MeshStandardMaterial({
+        color: 0x030ffc,
+        emissive: 0x4aa3ff,
+        emissiveIntensity: 3,
+    });
+    beamMaterial.toneMapped = false;
+    const emblemMaterial = new THREE.MeshStandardMaterial({
+        color: 0xB0B0A0,
+        metalness: 1.0,
+        roughness: 0.4
+    }); 
+    gltf.scene.traverse((obj) => {
+        if (obj.isSkinnedMesh) {
+            obj.material = beamMaterial;
+            obj.scale.multiplyScalar(1.03);
+            obj.frustumCulled = true;
+            obj.matrixAutoUpdate = false;
+        }
+        else if (obj.isMesh) {
+            obj.material =   emblemMaterial;         
+        }
+        obj.castShadow = false;
+        obj.receiveShadow = false;
+    });
+    const armature = gltf.scene.getObjectByName('Armature');
+    armature.position.y+=2;
+    armature.rotation.x=Math.PI/4;
+    for (let i = 0; i < 2; i++) {
+        const clone = cloneSkeleton(armature);
+        clone.position.copy(armature.position);
+        clone.rotation.copy(armature.rotation);
+        clone.rotation.x += (i+1.5) * Math.PI / 3;
+        clone.rotation.z += (i+1) * Math.PI / 10;
+        armature.parent.add(clone);
+        mixer2.clipAction(gltf.animations[0],clone).play();
+    }
+    mixer2.clipAction(gltf.animations[0],armature).play();
+    const lion = gltf.scene.getObjectByName('Lion');
+    const cow = gltf.scene.getObjectByName('cow');
+    const lions = new THREE.InstancedMesh(lion.geometry, lion.material, 4);
+    const cows = new THREE.InstancedMesh(cow.geometry, cow.material, 2);
+    const matrix = new THREE.Matrix4();
+    for (let i = 0; i < 2; i++) {
+        const rotation = cow.rotation.clone();
+        rotation.z +=(i)* Math.PI;
+        matrix.compose(
+            cow.position,
+            new THREE.Quaternion().setFromEuler(rotation),
+            cow.scale
+        );
+        cows.setMatrixAt(i, matrix);
+    }
+    for (let i = 0; i < 4; i++) {
+        const rotation = lion.rotation.clone();
+        rotation.z += (i+1) * Math.PI / 2;
+        matrix.compose(
+            lion.position,
+            new THREE.Quaternion().setFromEuler(rotation),
+            lion.scale
+        );
+        lions.setMatrixAt(i, matrix);
+    }
+    lion.parent.add(lions);
+    lion.parent.remove(lion);
+    cow.parent.add(cows);
+    cow.parent.remove(cow);
+    scene.add(gltf.scene);
 });
 const cameraDirection = new THREE.Vector3(0, 0, -1);
 const cameraRight = new THREE.Vector3();
@@ -613,6 +686,7 @@ let animate = () => {
     updateGroundGeometry(camera);
     updateOrbitPosition();
     mixer.update(1 / 60);
+    mixer2.update(1 / 30);
     updateLightPosition();
     renderer.render(scene, camera);    
 };
